@@ -175,6 +175,7 @@ fn parse_content_line(line: &str) -> Option<(u32, u32, Vec<u32>)> {
 
 pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u32> {
     let mut ground_layers = Vec::new();
+    let mut clip_layers = Vec::new();
     let mut bottom_layers = Vec::new();
     let mut normal_layers = Vec::new();
     let mut top_layers = Vec::new();
@@ -191,6 +192,9 @@ pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u3
         if obj.is_ground || obj.flags.iter().any(|f| f == "Bank") {
             // Ground layer: is_ground=true OR has Bank flag (water/swamp)
             ground_layers.push(id);
+        } else if obj.flags.iter().any(|f| f == "Clip") {
+            // Clip layer: ground decorations (grass overlays, small details)
+            clip_layers.push(id);
         } else if obj.flags.iter().any(|f| f == "Top") {
             // Top layer: explicit Top flag (open doors, hangings)
             top_layers.push(id);
@@ -203,9 +207,10 @@ pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u3
         }
     }
 
-    // Combine in render order: Ground → Bottom → Normal → Top
+    // Combine in render order: Ground → Clip → Bottom → Normal → Top
     let mut layers = Vec::new();
     layers.extend(ground_layers);
+    layers.extend(clip_layers);
     layers.extend(bottom_layers);
     layers.extend(normal_layers);
     layers.extend(top_layers);
