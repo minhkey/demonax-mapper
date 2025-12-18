@@ -10,3 +10,4 @@ image = { workspace = true }
 rayon = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+dashmap = { workspace = true }
