@@ -162,35 +162,53 @@ fn parse_content_line(line: &str) -> Option<(u32, u32, Vec<u32>)> {
 
     let obj_ids: Vec<u32> = ids_str
         .split(',')
-        .filter_map(|s| s.trim().parse().ok())
+        .filter_map(|s| {
+            // Extract just the first token (object ID), ignoring attributes like String="..."
+            let trimmed = s.trim();
+            let id_part = trimmed.split_whitespace().next()?;
+            id_part.parse().ok()
+        })
         .collect();
 
     Some((local_x, local_y, obj_ids))
 }
 
 pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u32> {
-    let mut layers = Vec::new();
+    let mut ground_layers = Vec::new();
+    let mut bottom_layers = Vec::new();
+    let mut normal_layers = Vec::new();
+    let mut top_layers = Vec::new();
 
     for &id in obj_ids {
-        if let Some(obj) = objects.get(&id) {
-            if obj.is_ground {
-                layers.push(id);
-                break;
-            }
+        let Some(obj) = objects.get(&id) else { continue };
+
+        // Skip takeable items
+        if obj.flags.iter().any(|f| f == "Take") {
+            continue;
+        }
+
+        // Classify by layer type
+        if obj.is_ground || obj.flags.iter().any(|f| f == "Bank") {
+            // Ground layer: is_ground=true OR has Bank flag (water/swamp)
+            ground_layers.push(id);
+        } else if obj.flags.iter().any(|f| f == "Top") {
+            // Top layer: explicit Top flag (open doors, hangings)
+            top_layers.push(id);
+        } else if obj.flags.iter().any(|f| f == "Bottom") {
+            // Bottom layer: walls, closed doors, plant bases
+            bottom_layers.push(id);
+        } else {
+            // Normal layer: everything else
+            normal_layers.push(id);
         }
     }
 
-    for &id in obj_ids.iter().rev() {
-        if let Some(obj) = objects.get(&id) {
-            if obj.flags.iter().any(|f| f == "Take") {
-                continue;
-            }
-            if obj.is_ground {
-                continue;
-            }
-            layers.push(id);
-        }
-    }
+    // Combine in render order: Ground → Bottom → Normal → Top
+    let mut layers = Vec::new();
+    layers.extend(ground_layers);
+    layers.extend(bottom_layers);
+    layers.extend(normal_layers);
+    layers.extend(top_layers);
 
     layers
 }
