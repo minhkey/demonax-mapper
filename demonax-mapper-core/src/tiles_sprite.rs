@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use image::{imageops, Rgba, RgbaImage};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, trace};
@@ -179,6 +180,24 @@ fn parse_content_line(line: &str) -> Option<(u32, u32, Vec<u32>)> {
     Some((local_x, local_y, obj_ids))
 }
 
+fn is_ground_flower(obj: &crate::objects::GameObject) -> bool {
+    // Check if object is a planted flower/blossom (ground decoration)
+    let name_lower = obj.name.to_lowercase();
+    let is_flower = name_lower.contains("flower") || name_lower.contains("blossom");
+
+    if !is_flower {
+        return false;
+    }
+
+    // Must have only Unmove flag (or Unmove + Avoid)
+    // This excludes flowery walls (have Hang), potted flowers (have other flags),
+    // and flowers already in Bottom layer (have Bottom flag)
+    let flags_set: HashSet<&str> = obj.flags.iter().map(|s: &String| s.as_str()).collect();
+
+    (flags_set.len() == 1 && flags_set.contains("Unmove")) ||
+    (flags_set.len() == 2 && flags_set.contains("Unmove") && flags_set.contains("Avoid"))
+}
+
 pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u32> {
     let mut ground_layers = Vec::new();
     let mut clip_layers = Vec::new();
@@ -200,6 +219,9 @@ pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u3
             ground_layers.push(id);
         } else if obj.flags.iter().any(|f| f == "Clip") {
             // Clip layer: ground decorations (grass overlays, small details)
+            clip_layers.push(id);
+        } else if is_ground_flower(obj) {
+            // Clip layer: planted flowers/blossoms (ground decorations)
             clip_layers.push(id);
         } else if obj.flags.iter().any(|f| f == "Top") {
             // Top layer: explicit Top flag (open doors, hangings)
