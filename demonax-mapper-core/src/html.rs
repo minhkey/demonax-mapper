@@ -81,7 +81,7 @@ pub fn generate_html<P: AsRef<Path>>(
             </select>
         </div>
         <div id="coords">
-            X: <span id="coord-x">-</span>, Y: <span id="coord-y">-</span>, Z: <span id="coord-z">-</span>
+            X: <span id="coord-x">-</span>, Y: <span id="coord-y">-</span>, Z: <span id="coord-z">-</span> | <span id="sector-file">-</span>
         </div>
     </div>
     <div id="map"></div>
@@ -184,9 +184,14 @@ pub fn generate_html<P: AsRef<Path>>(
             const worldX = minTileX + tileX;
             const worldY = maxTileY - tileY;
 
+            const sectorX = Math.floor(worldX / 32);
+            const sectorY = Math.floor(worldY / 32);
+            const sectorFile = `${{sectorX.toString().padStart(4, '0')}}-${{sectorY.toString().padStart(4, '0')}}-${{currentFloor.toString().padStart(2, '0')}}.sec`;
+
             document.getElementById('coord-x').textContent = worldX;
             document.getElementById('coord-y').textContent = worldY;
             document.getElementById('coord-z').textContent = currentFloor;
+            document.getElementById('sector-file').textContent = sectorFile;
         }});
 
         let updateHashTimeout;
