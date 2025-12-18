@@ -109,6 +109,42 @@ pub fn generate_html<P: AsRef<Path>>(
             attributionControl: false
         }});
 
+        function parseHash() {{
+            const hash = window.location.hash.substring(1);
+            if (!hash) return null;
+
+            const parts = hash.split(',');
+            if (parts.length !== 4) return null;
+
+            const [x, y, z, zoom] = parts.map(p => parseInt(p, 10));
+
+            if (isNaN(x) || isNaN(y) || isNaN(z) || isNaN(zoom)) return null;
+            if (!floors.includes(z)) return null;
+            if (zoom < minZoom || zoom > maxZoom) return null;
+
+            return {{ x, y, z, zoom }};
+        }}
+
+        function worldToTile(worldX, worldY) {{
+            const tileX = worldX - minTileX;
+            const tileY = maxTileY - worldY;
+            return {{ tileX, tileY }};
+        }}
+
+        function updateHash() {{
+            const center = map.getCenter();
+            const zoom = map.getZoom();
+
+            const tileX = Math.floor(center.lng);
+            const tileY = Math.floor(center.lat);
+
+            const worldX = minTileX + tileX;
+            const worldY = maxTileY - tileY;
+
+            const hash = `#${{worldX}},${{worldY}},${{currentFloor}},${{zoom}}`;
+            history.replaceState(null, '', hash);
+        }}
+
         function loadFloor(floor) {{
             if (tileLayer) {{
                 map.removeLayer(tileLayer);
@@ -125,8 +161,20 @@ pub fn generate_html<P: AsRef<Path>>(
             currentFloor = floor;
         }}
 
-        map.setView([768, 768], 0);
-        loadFloor(currentFloor);
+        const hashParams = parseHash();
+
+        if (hashParams) {{
+            currentFloor = hashParams.z;
+            loadFloor(currentFloor);
+
+            document.getElementById('floor-select').value = currentFloor;
+
+            const {{ tileX, tileY }} = worldToTile(hashParams.x, hashParams.y);
+            map.setView([tileY, tileX], hashParams.zoom);
+        }} else {{
+            map.setView([768, 768], 0);
+            loadFloor(currentFloor);
+        }}
 
         map.on('mousemove', function(e) {{
             const latLng = e.latlng;
@@ -141,8 +189,30 @@ pub fn generate_html<P: AsRef<Path>>(
             document.getElementById('coord-z').textContent = currentFloor;
         }});
 
+        let updateHashTimeout;
+        map.on('moveend', function() {{
+            clearTimeout(updateHashTimeout);
+            updateHashTimeout = setTimeout(updateHash, 100);
+        }});
+
+        map.on('zoomend', updateHash);
+
         document.getElementById('floor-select').addEventListener('change', function(e) {{
             loadFloor(parseInt(e.target.value));
+            updateHash();
+        }});
+
+        window.addEventListener('hashchange', function() {{
+            const hashParams = parseHash();
+            if (hashParams) {{
+                if (hashParams.z !== currentFloor) {{
+                    loadFloor(hashParams.z);
+                    document.getElementById('floor-select').value = hashParams.z;
+                }}
+
+                const {{ tileX, tileY }} = worldToTile(hashParams.x, hashParams.y);
+                map.setView([tileY, tileX], hashParams.zoom);
+            }}
         }});
     </script>
 </body>
