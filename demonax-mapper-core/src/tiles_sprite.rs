@@ -50,7 +50,12 @@ pub fn parse_sprite_map<P: AsRef<Path>>(
         .filter_map(|path| parse_sector_file_stacks(path, min_sector_x, min_sector_y).ok())
         .collect();
 
-    let tiles: Vec<TileStack> = all_tiles.into_iter().flatten().collect();
+    let mut tiles: Vec<TileStack> = all_tiles.into_iter().flatten().collect();
+
+    // Sort tiles for correct Z-ordering when sprites overlap across tiles
+    // Y ascending (back to front), X ascending (left to right)
+    // This ensures sprites farther away (lower Y, lower X) draw first
+    tiles.sort_by_key(|t| (t.y, t.x));
 
     Ok(SpriteMapData {
         floor,
@@ -142,7 +147,8 @@ fn parse_sector_file_stacks(
 }
 
 fn parse_content_line(line: &str) -> Option<(u32, u32, Vec<u32>)> {
-    let parts: Vec<&str> = line.split(':').collect();
+    // Split only on the FIRST colon to avoid issues with String attributes containing colons
+    let parts: Vec<&str> = line.splitn(2, ':').collect();
     if parts.len() < 2 {
         return None;
     }
@@ -198,8 +204,8 @@ pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u3
         } else if obj.flags.iter().any(|f| f == "Top") {
             // Top layer: explicit Top flag (open doors, hangings)
             top_layers.push(id);
-        } else if obj.flags.iter().any(|f| f == "Bottom") {
-            // Bottom layer: walls, closed doors, plant bases
+        } else if obj.flags.iter().any(|f| f == "Bottom" || f == "Text") {
+            // Bottom layer: walls, closed doors, plant bases, signs/text
             bottom_layers.push(id);
         } else {
             // Normal layer: everything else
@@ -349,14 +355,13 @@ fn render_single_sprite_tile(
             let sprite_top_left_x = tile_stack.x as i32 - (sprite_tiles_wide as i32 - 1);
             let sprite_top_left_y = tile_stack.y as i32 - (sprite_tiles_high as i32 - 1);
 
-            let obj_tile_x = sprite_top_left_x.max(0) as u32;
-            let obj_tile_y = sprite_top_left_y.max(0) as u32;
+            // Calculate sprite bounds (keep as i32 to handle negative coordinates at boundaries)
+            let sprite_end_x = sprite_top_left_x + sprite_tiles_wide as i32;
+            let sprite_end_y = sprite_top_left_y + sprite_tiles_high as i32;
 
-            let obj_tile_end_x = obj_tile_x + sprite_tiles_wide;
-            let obj_tile_end_y = obj_tile_y + sprite_tiles_high;
-
-            if obj_tile_x < tile_end_x && obj_tile_end_x > tile_start_x &&
-               obj_tile_y < tile_end_y && obj_tile_end_y > tile_start_y {
+            // Overlap check using i32 to properly handle sprites at sector boundaries
+            if sprite_top_left_x < tile_end_x as i32 && sprite_end_x > tile_start_x as i32 &&
+               sprite_top_left_y < tile_end_y as i32 && sprite_end_y > tile_start_y as i32 {
 
                 let px = (sprite_top_left_x - tile_start_x as i32) * scale as i32;
                 let py = (sprite_top_left_y - tile_start_y as i32) * scale as i32;
