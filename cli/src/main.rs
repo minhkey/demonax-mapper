@@ -44,6 +44,12 @@ enum Commands {
 
         #[arg(long, default_value = "5")]
         max_zoom: u8,
+
+        #[arg(long, help = "Path to demonax-data repository (for monster.db)")]
+        data_path: Option<PathBuf>,
+
+        #[arg(long, help = "Path to monster sprite directory (PNG files named by race ID)")]
+        monster_sprites: Option<PathBuf>,
     },
 }
 
@@ -73,8 +79,10 @@ fn main() -> Result<()> {
             floors,
             min_zoom,
             max_zoom,
+            data_path,
+            monster_sprites,
         } => {
-            cmd_build(game_path, sprite_path, output, floors, min_zoom, max_zoom)?;
+            cmd_build(game_path, sprite_path, output, floors, min_zoom, max_zoom, data_path, monster_sprites)?;
         }
     }
 
@@ -104,6 +112,8 @@ fn cmd_build(
     floors_str: String,
     min_zoom: u8,
     max_zoom: u8,
+    data_path: Option<PathBuf>,
+    monster_sprites: Option<PathBuf>,
 ) -> Result<()> {
     let floors = parse_floor_range(&floors_str)?;
 
@@ -182,6 +192,45 @@ fn cmd_build(
     let max_tile_y = (global_max_sector_y + 1) * 32 - 1;
 
     generate_html(&output, &floors, min_zoom, max_zoom, min_tile_x, max_tile_x, min_tile_y, max_tile_y)?;
+
+    if let (Some(data_path), Some(monster_sprites)) = (data_path, monster_sprites) {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
+        pb.set_message("Parsing monster data...");
+
+        let monster_db_path = data_path.join("game/dat/monster.db");
+        let spawns = parse_monster_db(&monster_db_path)?;
+
+        pb.set_message("Copying monster sprites...");
+        let monsters_dir = output.join("monsters");
+        fs::create_dir_all(&monsters_dir)?;
+
+        // Copy PNG files (named by race ID)
+        let mut copied_count = 0;
+        for spawn in &spawns {
+            let race_id = spawn.race;
+            let src = monster_sprites.join(format!("{}.png", race_id));
+            let dst = monsters_dir.join(format!("{}.png", race_id));
+
+            if src.exists() {
+                fs::copy(&src, &dst)?;
+                copied_count += 1;
+            } else {
+                tracing::warn!("Missing PNG for race ID {}: {:?}", race_id, src);
+            }
+        }
+
+        pb.set_message("Generating spawn data...");
+        let spawn_json = generate_spawn_json(&spawns, &floors)?;
+        fs::write(output.join("spawns.json"), spawn_json)?;
+
+        pb.finish_with_message(format!(
+            "Monster spawns: {} spawns, {} sprites copied",
+            spawns.len(),
+            copied_count
+        ));
+    }
+
     println!("✓ Build complete → {:?}/index.html", output);
 
     Ok(())

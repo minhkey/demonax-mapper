@@ -70,6 +70,42 @@ pub fn generate_html<P: AsRef<Path>>(
             margin-left: auto;
             font-size: 14px;
         }}
+        .leaflet-marker-icon.spawn-marker {{
+            width: 32px !important;
+            height: 32px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: absolute !important;
+            border: none !important;
+            background: none !important;
+        }}
+        .spawn-marker img {{
+            max-width: 32px;
+            max-height: 32px;
+            width: auto;
+            height: auto;
+            image-rendering: pixelated;
+        }}
+        .spawn-amount {{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            font-weight: bold;
+            font-size: 14px;
+            pointer-events: none;
+        }}
+        input[type="checkbox"] {{
+            cursor: pointer;
+        }}
+        .control-group input[type="checkbox"] {{
+            margin-right: 5px;
+        }}
     </style>
 </head>
 <body>
@@ -79,6 +115,12 @@ pub fn generate_html<P: AsRef<Path>>(
             <select id="floor-select">
 {floor_options}
             </select>
+        </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="spawn-toggle" />
+                Show Spawns
+            </label>
         </div>
         <div id="coords">
             X: <span id="coord-x">-</span>, Y: <span id="coord-y">-</span>, Z: <span id="coord-z">-</span> | <span id="sector-file">-</span>
@@ -99,7 +141,7 @@ pub fn generate_html<P: AsRef<Path>>(
         let tileLayer = null;
 
         const CustomCRS = L.extend({{}}, L.CRS.Simple, {{
-            transformation: new L.Transformation(1, 0, -1, 1536)
+            transformation: new L.Transformation(1, 0, 1, 0)
         }});
 
         const map = L.map('map', {{
@@ -127,7 +169,7 @@ pub fn generate_html<P: AsRef<Path>>(
 
         function worldToTile(worldX, worldY) {{
             const tileX = worldX - minTileX;
-            const tileY = maxTileY - worldY;
+            const tileY = worldY - minTileY;
             return {{ tileX, tileY }};
         }}
 
@@ -139,7 +181,7 @@ pub fn generate_html<P: AsRef<Path>>(
             const tileY = Math.floor(center.lat);
 
             const worldX = minTileX + tileX;
-            const worldY = maxTileY - tileY;
+            const worldY = minTileY + tileY;
 
             const hash = `#${{worldX}},${{worldY}},${{currentFloor}},${{zoom}}`;
             history.replaceState(null, '', hash);
@@ -154,7 +196,7 @@ pub fn generate_html<P: AsRef<Path>>(
                 minZoom: minZoom,
                 maxZoom: maxZoom,
                 noWrap: true,
-                bounds: [[0, 0], [1536, 1536]]
+                bounds: [[0, 0], [{max_tile_y} - {min_tile_y}, {max_tile_x} - {min_tile_x}]]
             }});
 
             tileLayer.addTo(map);
@@ -172,7 +214,7 @@ pub fn generate_html<P: AsRef<Path>>(
             const {{ tileX, tileY }} = worldToTile(hashParams.x, hashParams.y);
             map.setView([tileY, tileX], hashParams.zoom);
         }} else {{
-            map.setView([768, 768], 0);
+            map.setView([({max_tile_y} - {min_tile_y}) / 2, ({max_tile_x} - {min_tile_x}) / 2], 0);
             loadFloor(currentFloor);
         }}
 
@@ -182,7 +224,7 @@ pub fn generate_html<P: AsRef<Path>>(
             const tileY = Math.floor(latLng.lat);
 
             const worldX = minTileX + tileX;
-            const worldY = maxTileY - tileY;
+            const worldY = minTileY + tileY;
 
             const sectorX = Math.floor(worldX / 32);
             const sectorY = Math.floor(worldY / 32);
@@ -219,6 +261,96 @@ pub fn generate_html<P: AsRef<Path>>(
                 map.setView([tileY, tileX], hashParams.zoom);
             }}
         }});
+
+        // Monster spawn overlay
+        let spawnData = null;
+        let spawnMarkers = [];
+
+        fetch('spawns.json')
+            .then(response => {{
+                if (!response.ok) {{
+                    throw new Error('Spawn data not found');
+                }}
+                return response.json();
+            }})
+            .then(data => {{
+                spawnData = data;
+                updateSpawnLayer();
+            }})
+            .catch(err => {{
+                console.warn('Monster spawns unavailable:', err);
+                const toggle = document.getElementById('spawn-toggle');
+                if (toggle) {{
+                    toggle.disabled = true;
+                    toggle.parentElement.title = 'Monster spawn data not available';
+                }}
+            }});
+
+        function worldToLatLng(worldX, worldY) {{
+            const tileX = worldX - minTileX;
+            const tileY = worldY - minTileY;
+            return [tileY, tileX];
+        }}
+
+        function updateSpawnLayer() {{
+            spawnMarkers.forEach(marker => map.removeLayer(marker));
+            spawnMarkers = [];
+
+            const toggle = document.getElementById('spawn-toggle');
+            const showSpawns = toggle && toggle.checked;
+            const currentZoom = map.getZoom();
+
+            if (!showSpawns || !spawnData || currentZoom < 3) {{
+                return;
+            }}
+
+            const floorSpawns = spawnData.spawns_by_floor[currentFloor] || [];
+            const bounds = map.getBounds();
+
+            const visibleSpawns = floorSpawns.filter(spawn => {{
+                const [lat, lng] = worldToLatLng(spawn.x, spawn.y);
+                return bounds.contains([lat, lng]);
+            }});
+
+            visibleSpawns.forEach(spawn => {{
+                const [lat, lng] = worldToLatLng(spawn.x, spawn.y);
+
+                const icon = L.divIcon({{
+                    className: 'spawn-marker',
+                    html: `
+                        <img src="monsters/${{spawn.race}}.png" alt="Race ${{spawn.race}}" onerror="this.style.display='none'" />
+                        <div class="spawn-amount">${{spawn.amount}}</div>
+                    `,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16],
+                    popupAnchor: [0, -16]
+                }});
+
+                const marker = L.marker([lat, lng], {{ icon: icon }})
+                    .bindPopup(`
+                        <b>Race ID: ${{spawn.race}}</b><br/>
+                        Spawn Amount: ${{spawn.amount}}<br/>
+                        Position: ${{spawn.x}}, ${{spawn.y}}
+                    `);
+
+                marker.addTo(map);
+                spawnMarkers.push(marker);
+            }});
+        }}
+
+        const spawnToggle = document.getElementById('spawn-toggle');
+        if (spawnToggle) {{
+            spawnToggle.addEventListener('change', updateSpawnLayer);
+        }}
+
+        map.on('moveend', updateSpawnLayer);
+        map.on('zoomend', updateSpawnLayer);
+
+        const originalLoadFloor = loadFloor;
+        loadFloor = function(floor) {{
+            originalLoadFloor(floor);
+            updateSpawnLayer();
+        }};
     </script>
 </body>
 </html>"#,
