@@ -28,6 +28,8 @@ pub struct SpriteMapData {
 pub fn parse_sprite_map<P: AsRef<Path>>(
     game_path: P,
     floor: u8,
+    global_min_sector_x: u32,
+    global_min_sector_y: u32,
 ) -> Result<SpriteMapData> {
     let map_dir = game_path.as_ref().join("map");
 
@@ -43,12 +45,12 @@ pub fn parse_sprite_map<P: AsRef<Path>>(
         })
         .collect();
 
-    let (min_sector_x, max_sector_x, min_sector_y, max_sector_y) =
+    let (floor_min_x, floor_max_x, floor_min_y, floor_max_y) =
         calculate_bounds(&sec_files, floor)?;
 
     let all_tiles: Vec<Vec<TileStack>> = sec_files
         .par_iter()
-        .filter_map(|path| parse_sector_file_stacks(path, min_sector_x, min_sector_y).ok())
+        .filter_map(|path| parse_sector_file_stacks(path, global_min_sector_x, global_min_sector_y).ok())
         .collect();
 
     let mut tiles: Vec<TileStack> = all_tiles.into_iter().flatten().collect();
@@ -61,10 +63,10 @@ pub fn parse_sprite_map<P: AsRef<Path>>(
     Ok(SpriteMapData {
         floor,
         tiles,
-        min_sector_x,
-        max_sector_x,
-        min_sector_y,
-        max_sector_y,
+        min_sector_x: floor_min_x,
+        max_sector_x: floor_max_x,
+        min_sector_y: floor_min_y,
+        max_sector_y: floor_max_y,
     })
 }
 

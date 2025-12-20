@@ -70,12 +70,18 @@ impl SpriteCache {
 
         let rgba = img.to_rgba8();
 
-        if rgba.width() != 32 || rgba.height() != 32 {
+        let width = rgba.width();
+        let height = rgba.height();
+
+        let width_valid = width == 32 || width == 64;
+        let height_valid = height == 32 || height == 64;
+
+        if !width_valid || !height_valid {
             warn!(
-                "Sprite {} has unexpected dimensions: {}x{} (expected 32x32)",
+                "Sprite {} has unsupported dimensions: {}x{} (supported: 32x32, 64x64, 64x32, 32x64)",
                 object_id,
-                rgba.width(),
-                rgba.height()
+                width,
+                height
             );
         }
 

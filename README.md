@@ -7,9 +7,11 @@ A high-performance map tile generator for Demonax/Tibia game servers. Generates 
 - **Sprite-based rendering** - Uses actual game sprites for authentic map visualization
 - **Multi-zoom support** - Generates tiles at multiple zoom levels (0-5)
 - **Multi-floor support** - Generate maps for any floor (0-15)
+- **Monster spawn visualization** - Displays spawn points from monster.db with creature images
 - **Fast generation** - Optimized parallel processing with caching
 - **Web viewer** - Includes interactive HTML map viewer with Leaflet.js
 - **Correct Z-ordering** - Proper isometric rendering with accurate sprite layering
+- **Map coordinate display** - Shows position hash and corresponding .sec file for each location
 
 ## Prerequisites
 
@@ -91,6 +93,25 @@ Generate only specific zoom levels:
     --output my-map
 ```
 
+### Including Monster Spawns
+
+Generate map with monster spawn points:
+
+```bash
+./target/release/demonax-mapper build \
+    /path/to/game \
+    --sprite-path /path/to/sprites \
+    --floors 7 \
+    --data-path /path/to/demonax-data \
+    --monster-sprites /path/to/monster-sprites
+```
+
+Monster spawns will be displayed as markers on the map with creature images.
+
+**Note:** Both `--data-path` and `--monster-sprites` are required for monster spawn visualization:
+- `--data-path` points to the demonax-data repository (looks for `game/dat/monster.db` inside)
+- `--monster-sprites` points to a directory containing PNG files named by race ID (e.g., `1.png`, `2.png`)
+
 ### Verbose Output
 
 Add `-v` flags for more detailed logging:
@@ -121,6 +142,10 @@ Main command for generating map tiles.
 - `--output <PATH>` - Output directory (default: `output`)
 - `--min-zoom <LEVEL>` - Minimum zoom level (default: `0`)
 - `--max-zoom <LEVEL>` - Maximum zoom level (default: `5`)
+- `--data-path <PATH>` - Path to demonax-data repository (for monster.db)
+- `--monster-sprites <PATH>` - Path to monster sprite directory (PNG files named by race ID)
+
+**Note:** Both `--data-path` and `--monster-sprites` must be provided together to enable monster spawn visualization.
 
 ### `parse-objects`
 
@@ -132,6 +157,31 @@ Parse objects.srv file (rarely needed - happens automatically):
     --output .demonax-cache/objects.json
 ```
 
+## Testing Locally
+
+After generating the map, you can test it locally using Python's built-in HTTP server:
+
+```bash
+cd output
+python3 -m http.server 8000
+```
+
+Then open your browser to `http://localhost:8000` to view the interactive map.
+
+**Note:** A local web server is required because the map tiles are loaded via HTTP requests. Simply opening `index.html` in a browser won't work due to CORS restrictions.
+
+## Map Viewer Features
+
+The generated interactive map includes:
+
+- **Floor Selection** - Dropdown to switch between different floor levels
+- **Coordinate Display** - Shows current mouse position in game coordinates (X, Y, Z)
+- **Position Hash** - Displays the position hash for the current location
+- **Sector File** - Shows the corresponding `.sec` file name for the current position
+- **Monster Spawns** - Clickable markers showing spawn points with creature images (when `--data-path` and `--monster-sprites` are provided)
+- **Zoom Controls** - Navigate between 6 zoom levels with smooth transitions
+- **Pan & Zoom** - Click and drag to pan, scroll wheel to zoom
+
 ## Output Structure
 
 After generation, the output directory contains:
@@ -139,6 +189,11 @@ After generation, the output directory contains:
 ```
 output/
 ├── index.html          # Interactive map viewer
+├── spawns.json         # Monster spawn data (optional, when using --data-path)
+├── monsters/           # Monster sprite images (optional, when using --monster-sprites)
+│   ├── 1.png          # PNG files named by race ID
+│   ├── 2.png
+│   └── ...
 ├── 7/                  # Floor 7
 │   ├── 0/             # Zoom level 0
 │   │   ├── 0/         # Tile column 0
@@ -150,6 +205,49 @@ output/
 │   └── ...
 └── ...
 ```
+
+## Deployment
+
+### Deploying to a Quarto Website
+
+To deploy the map to a Quarto-based website (like demonax-web):
+
+1. Generate the map with your desired settings:
+   ```bash
+   ./target/release/demonax-mapper build \
+       /path/to/game \
+       --sprite-path /path/to/sprites \
+       --floors 7 \
+       --data-path /path/to/demonax-data \
+       --monster-sprites /path/to/monster-sprites \
+       --output /tmp/map-output
+   ```
+
+2. Copy the generated files to the website's dynamic directory:
+   ```bash
+   # Copy to the Quarto project's resources directory
+   mkdir -p ~/repos/demonax-web/dynamic/map
+   cp -r /tmp/map-output/* ~/repos/demonax-web/dynamic/map/
+   ```
+
+3. Rebuild the Quarto site:
+   ```bash
+   cd ~/repos/demonax-web
+   quarto render
+   ```
+
+4. The map will be accessible at `/dynamic/map/index.html` on your published site.
+
+**Note:** Make sure the `dynamic` directory is listed in your `_quarto.yml` resources section:
+```yaml
+project:
+  resources:
+    - "dynamic"
+```
+
+### Deploying to Static Web Hosting
+
+The output can be deployed to any static web host (GitHub Pages, Netlify, Vercel, etc.) by simply uploading the contents of the output directory.
 
 ## Caching
 
