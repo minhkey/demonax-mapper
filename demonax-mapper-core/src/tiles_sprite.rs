@@ -393,8 +393,9 @@ fn render_single_sprite_tile(
             let sprite_end_y = sprite_top_left_y + sprite_tiles_high as i32;
 
             // Overlap check using i32 to properly handle sprites at sector boundaries
-            if sprite_top_left_x < tile_end_x as i32 && sprite_end_x > tile_start_x as i32 &&
-               sprite_top_left_y < tile_end_y as i32 && sprite_end_y > tile_start_y as i32 {
+            // Use <= for top-left checks to include sprites that start exactly at tile boundary
+            if sprite_top_left_x <= tile_end_x as i32 && sprite_end_x > tile_start_x as i32 &&
+               sprite_top_left_y <= tile_end_y as i32 && sprite_end_y > tile_start_y as i32 {
 
                 let px = (sprite_top_left_x - tile_start_x as i32) * scale as i32;
                 let py = (sprite_top_left_y - tile_start_y as i32) * scale as i32;

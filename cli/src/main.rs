@@ -189,8 +189,18 @@ fn cmd_build(
     let pb = ProgressBar::new_spinner();
     pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
     pb.set_message("Preloading sprites...");
-    let all_object_ids: Vec<u32> = objects.keys().copied().collect();
-    sprite_cache.preload_sprites(&all_object_ids)?;
+    let mut all_sprite_ids: Vec<u32> = objects.keys().copied().collect();
+
+    // Also preload DisguiseTarget sprites
+    let disguise_targets: Vec<u32> = objects
+        .values()
+        .filter_map(|obj| obj.disguise_target)
+        .collect();
+    all_sprite_ids.extend(disguise_targets);
+    all_sprite_ids.sort_unstable();
+    all_sprite_ids.dedup();
+
+    sprite_cache.preload_sprites(&all_sprite_ids)?;
     pb.finish_with_message(format!("Loaded {} sprites", sprite_cache.cache_size()));
 
     let pb = ProgressBar::new_spinner();
