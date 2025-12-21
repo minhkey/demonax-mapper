@@ -248,6 +248,8 @@ fn cmd_build(
 
     generate_html(&output, &floors, min_zoom, max_zoom, min_tile_x, max_tile_x, min_tile_y, max_tile_y)?;
 
+    let data_path_clone = data_path.clone();
+
     if let (Some(data_path), Some(monster_sprites)) = (data_path, monster_sprites) {
         let pb = ProgressBar::new_spinner();
         pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
@@ -285,6 +287,36 @@ fn cmd_build(
             copied_count
         ));
     }
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
+    pb.set_message("Parsing quest chests...");
+
+    let quest_names = if let Some(ref data_path) = data_path_clone {
+        let quest_csv_path = data_path.join("csv/quest_overview.csv");
+        if quest_csv_path.exists() {
+            pb.set_message("Loading quest names from CSV...");
+            match parse_quest_csv(&quest_csv_path) {
+                Ok(names) => names,
+                Err(e) => {
+                    tracing::warn!("Failed to load quest names: {}", e);
+                    Default::default()
+                }
+            }
+        } else {
+            Default::default()
+        }
+    } else {
+        Default::default()
+    };
+
+    let quest_chests = parse_questchests_from_sectors(&map_dir, &floors, &quest_names)?;
+
+    pb.set_message("Generating quest chest data...");
+    let questchests_json = generate_questchests_json(&quest_chests, &floors)?;
+    fs::write(output.join("questchests.json"), questchests_json)?;
+
+    pb.finish_with_message(format!("Quest chests: {} found", quest_chests.len()));
 
     println!("✓ Build complete → {:?}/index.html", output);
 

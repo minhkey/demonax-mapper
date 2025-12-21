@@ -12,6 +12,7 @@ pub struct GameObject {
     pub waypoints: u32,
     pub is_ground: bool,
     pub is_impassable: bool,
+    pub disguise_target: Option<u32>,
 }
 
 pub type ObjectDatabase = HashMap<u32, GameObject>;
@@ -48,6 +49,7 @@ fn parse_object_block(lines: &[&str]) -> Result<GameObject> {
     let mut name = String::new();
     let mut flags = Vec::new();
     let mut waypoints = 0;
+    let mut disguise_target = None;
 
     for line in lines {
         let line = line.trim();
@@ -75,6 +77,9 @@ fn parse_object_block(lines: &[&str]) -> Result<GameObject> {
             if let Some(wp) = extract_waypoints(value) {
                 waypoints = wp;
             }
+            if let Some(dt) = extract_disguise_target(value) {
+                disguise_target = Some(dt);
+            }
         }
     }
 
@@ -89,6 +94,7 @@ fn parse_object_block(lines: &[&str]) -> Result<GameObject> {
         waypoints,
         is_ground,
         is_impassable,
+        disguise_target,
     })
 }
 
@@ -96,6 +102,14 @@ fn extract_waypoints(attributes: &str) -> Option<u32> {
     attributes
         .split(',')
         .find(|s| s.contains("Waypoints"))
+        .and_then(|s| s.split('=').nth(1))
+        .and_then(|s| s.trim().trim_matches('}').parse().ok())
+}
+
+fn extract_disguise_target(attributes: &str) -> Option<u32> {
+    attributes
+        .split(',')
+        .find(|s| s.contains("DisguiseTarget"))
         .and_then(|s| s.split('=').nth(1))
         .and_then(|s| s.trim().trim_matches('}').parse().ok())
 }

@@ -122,6 +122,12 @@ pub fn generate_html<P: AsRef<Path>>(
                 Show Spawns
             </label>
         </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="questchest-toggle" />
+                Show Questboxes
+            </label>
+        </div>
         <div id="coords">
             X: <span id="coord-x">-</span>, Y: <span id="coord-y">-</span>, Z: <span id="coord-z">-</span> | <span id="sector-file">-</span>
         </div>
@@ -286,6 +292,30 @@ pub fn generate_html<P: AsRef<Path>>(
                 }}
             }});
 
+        // Quest chest overlay
+        let questChestData = null;
+        let questChestMarkers = [];
+
+        fetch('questchests.json')
+            .then(response => {{
+                if (!response.ok) {{
+                    throw new Error('Quest chest data not found');
+                }}
+                return response.json();
+            }})
+            .then(data => {{
+                questChestData = data;
+                updateQuestChestLayer();
+            }})
+            .catch(err => {{
+                console.warn('Quest chests unavailable:', err);
+                const toggle = document.getElementById('questchest-toggle');
+                if (toggle) {{
+                    toggle.disabled = true;
+                    toggle.parentElement.title = 'Quest chest data not available';
+                }}
+            }});
+
         function worldToLatLng(worldX, worldY) {{
             const tileX = worldX - minTileX;
             const tileY = worldY - minTileY;
@@ -338,18 +368,73 @@ pub fn generate_html<P: AsRef<Path>>(
             }});
         }}
 
+        function updateQuestChestLayer() {{
+            questChestMarkers.forEach(marker => map.removeLayer(marker));
+            questChestMarkers = [];
+
+            const toggle = document.getElementById('questchest-toggle');
+            const showQuestChests = toggle && toggle.checked;
+            const currentZoom = map.getZoom();
+
+            if (!showQuestChests || !questChestData || currentZoom < 3) {{
+                return;
+            }}
+
+            const floorChests = questChestData.questchests_by_floor[currentFloor] || [];
+            const bounds = map.getBounds();
+
+            const visibleChests = floorChests.filter(chest => {{
+                const [lat, lng] = worldToLatLng(chest.x, chest.y);
+                return bounds.contains([lat, lng]);
+            }});
+
+            visibleChests.forEach(chest => {{
+                // Center the marker on the tile by adding 0.5 offset
+                const [lat, lng] = worldToLatLng(chest.x + 0.5, chest.y + 0.5);
+
+                const marker = L.circleMarker([lat, lng], {{
+                    radius: 10,
+                    fillColor: '#FFD700',
+                    color: '#FFD700',
+                    weight: 3,
+                    opacity: 0.9,
+                    fillOpacity: 0.7
+                }})
+                .bindPopup(`
+                    <b>Quest Chest ${{chest.quest_number}}</b><br/>
+                    ${{chest.quest_name ? chest.quest_name : 'Unknown Quest'}}
+                `);
+
+                marker.addTo(map);
+                questChestMarkers.push(marker);
+            }});
+        }}
+
         const spawnToggle = document.getElementById('spawn-toggle');
         if (spawnToggle) {{
             spawnToggle.addEventListener('change', updateSpawnLayer);
         }}
 
-        map.on('moveend', updateSpawnLayer);
-        map.on('zoomend', updateSpawnLayer);
+        const questChestToggle = document.getElementById('questchest-toggle');
+        if (questChestToggle) {{
+            questChestToggle.addEventListener('change', updateQuestChestLayer);
+        }}
+
+        map.on('moveend', function() {{
+            updateSpawnLayer();
+            updateQuestChestLayer();
+        }});
+
+        map.on('zoomend', function() {{
+            updateSpawnLayer();
+            updateQuestChestLayer();
+        }});
 
         const originalLoadFloor = loadFloor;
         loadFloor = function(floor) {{
             originalLoadFloor(floor);
             updateSpawnLayer();
+            updateQuestChestLayer();
         }};
     </script>
 </body>

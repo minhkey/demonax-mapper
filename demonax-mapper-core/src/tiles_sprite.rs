@@ -207,11 +207,16 @@ pub fn select_sprite_layers(obj_ids: &[u32], objects: &ObjectDatabase) -> Vec<u3
     let mut normal_layers = Vec::new();
     let mut top_layers = Vec::new();
 
+    // Chest/container object IDs that should always be rendered (for quest chests)
+    const CHEST_IDS: &[u32] = &[2543, 2546, 2550, 2551, 2552, 2555, 2560, 4445, 4830];
+
     for &id in obj_ids {
         let Some(obj) = objects.get(&id) else { continue };
 
-        // Skip takeable items
-        if obj.flags.iter().any(|f| f == "Take") {
+        // Skip takeable items, except for chests/containers which should always be visible
+        let is_chest = CHEST_IDS.contains(&id);
+        let is_container = obj.flags.iter().any(|f| f == "Chest" || f == "Container");
+        if obj.flags.iter().any(|f| f == "Take") && !is_chest && !is_container {
             continue;
         }
 
@@ -367,7 +372,11 @@ fn render_single_sprite_tile(
         let layers = select_sprite_layers(&tile_stack.object_ids, objects);
 
         for &obj_id in &layers {
-            let sprite = sprite_cache.get_sprite(obj_id)?;
+            // Use DisguiseTarget sprite if object has one
+            let sprite_id = objects.get(&obj_id)
+                .and_then(|obj| obj.disguise_target)
+                .unwrap_or(obj_id);
+            let sprite = sprite_cache.get_sprite(sprite_id)?;
             let scaled = scale_sprite(&*sprite, scale);
             let (sprite_width, sprite_height) = scaled.dimensions();
 
