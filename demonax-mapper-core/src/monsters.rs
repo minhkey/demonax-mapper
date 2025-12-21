@@ -98,9 +98,61 @@ pub fn parse_monster_db<P: AsRef<Path>>(path: P) -> Result<Vec<MonsterSpawn>> {
     Ok(spawns)
 }
 
+pub fn parse_monster_names<P: AsRef<Path>>(mon_dir: P) -> Result<HashMap<u32, String>> {
+    let mon_dir = mon_dir.as_ref();
+    let mut monster_names = HashMap::new();
+
+    let entries = fs::read_dir(mon_dir)
+        .with_context(|| format!("Failed to read monster directory: {:?}", mon_dir))?;
+
+    for entry_result in entries {
+        let entry = entry_result?;
+        let path = entry.path();
+
+        if path.extension().and_then(|s| s.to_str()) != Some("mon") {
+            continue;
+        }
+
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read .mon file: {:?}", path))?;
+
+        let mut race_number: Option<u32> = None;
+        let mut name: Option<String> = None;
+
+        for line in content.lines() {
+            let line = line.trim();
+
+            if line.starts_with("RaceNumber") {
+                if let Some(value) = line.split('=').nth(1) {
+                    race_number = value.trim().parse().ok();
+                }
+            } else if line.starts_with("Name") {
+                if let Some(value) = line.split('=').nth(1) {
+                    name = Some(value.trim().trim_matches('"').to_string());
+                }
+            }
+
+            if race_number.is_some() && name.is_some() {
+                break;
+            }
+        }
+
+        if let (Some(race_id), Some(monster_name)) = (race_number, name) {
+            monster_names.insert(race_id, monster_name);
+        } else {
+            tracing::warn!("Incomplete monster data in file: {:?}", path);
+        }
+    }
+
+    tracing::info!("Loaded {} monster names from .mon files", monster_names.len());
+    Ok(monster_names)
+}
+
 #[derive(Serialize)]
 struct SpawnOutput {
     race: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
     x: u32,
     y: u32,
     amount: u32,
@@ -110,6 +162,7 @@ struct SpawnOutput {
 pub fn generate_spawn_json(
     spawns: &[MonsterSpawn],
     floors: &[u8],
+    monster_names: &HashMap<u32, String>,
 ) -> Result<String> {
     let mut spawns_by_floor: HashMap<u8, Vec<SpawnOutput>> = HashMap::new();
 
@@ -117,6 +170,7 @@ pub fn generate_spawn_json(
         if floors.contains(&spawn.z) {
             let spawn_output = SpawnOutput {
                 race: spawn.race,
+                name: monster_names.get(&spawn.race).cloned(),
                 x: spawn.x,
                 y: spawn.y,
                 amount: spawn.amount,

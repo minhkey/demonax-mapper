@@ -287,8 +287,25 @@ fn cmd_build(
             }
         }
 
+        pb.set_message("Loading monster names...");
+        let monster_names = {
+            let mon_dir = data_path.join("game/mon");
+            if mon_dir.exists() {
+                match parse_monster_names(&mon_dir) {
+                    Ok(names) => names,
+                    Err(e) => {
+                        tracing::warn!("Failed to load monster names: {}", e);
+                        Default::default()
+                    }
+                }
+            } else {
+                tracing::warn!("Monster directory not found: {:?}", mon_dir);
+                Default::default()
+            }
+        };
+
         pb.set_message("Generating spawn data...");
-        let spawn_json = generate_spawn_json(&spawns, &floors)?;
+        let spawn_json = generate_spawn_json(&spawns, &floors, &monster_names)?;
         fs::write(output.join("spawns.json"), spawn_json)?;
 
         pb.finish_with_message(format!(

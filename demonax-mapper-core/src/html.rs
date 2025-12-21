@@ -32,7 +32,7 @@ pub fn generate_html<P: AsRef<Path>>(
             top: 50px;
             bottom: 0;
             width: 100%;
-            background-color: #214263;
+            background-color: #000000;
         }}
         #controls {{
             position: absolute;
@@ -119,13 +119,13 @@ pub fn generate_html<P: AsRef<Path>>(
         <div class="control-group">
             <label>
                 <input type="checkbox" id="spawn-toggle" />
-                Show Spawns
+                Show spawns
             </label>
         </div>
         <div class="control-group">
             <label>
                 <input type="checkbox" id="questchest-toggle" />
-                Show Questboxes
+                Show quest locations
             </label>
         </div>
         <div id="coords">
@@ -358,8 +358,8 @@ pub fn generate_html<P: AsRef<Path>>(
 
                 const marker = L.marker([lat, lng], {{ icon: icon }})
                     .bindPopup(`
-                        <b>Race ID: ${{spawn.race}}</b><br/>
-                        Spawn Amount: ${{spawn.amount}}<br/>
+                        <b>${{spawn.name ? spawn.name.charAt(0).toUpperCase() + spawn.name.slice(1) + ' (ID: ' + spawn.race + ')' : 'Race ID: ' + spawn.race}}</b><br/>
+                        Spawn amount: ${{spawn.amount}}<br/>
                         Position: ${{spawn.x}}, ${{spawn.y}}
                     `);
 
@@ -401,8 +401,8 @@ pub fn generate_html<P: AsRef<Path>>(
                     fillOpacity: 0.7
                 }})
                 .bindPopup(`
-                    <b>Quest Chest ${{chest.quest_number}}</b><br/>
-                    ${{chest.quest_name ? chest.quest_name : 'Unknown Quest'}}
+                    <b>${{chest.quest_name ? chest.quest_name : 'Unknown quest'}}</b><br/>
+                    Quest number: ${{chest.quest_number}}
                 `);
 
                 marker.addTo(map);
