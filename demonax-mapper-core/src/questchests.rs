@@ -96,8 +96,8 @@ pub fn parse_questchests_from_sectors<P: AsRef<Path>>(
             continue;
         }
 
-        let content = match fs::read_to_string(&path) {
-            Ok(c) => c,
+        let content = match fs::read(&path) {
+            Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
             Err(e) => {
                 tracing::warn!("Failed to read {:?}: {}", path, e);
                 continue;
