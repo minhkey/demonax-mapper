@@ -50,7 +50,15 @@ pub fn parse_sprite_map<P: AsRef<Path>>(
 
     let all_tiles: Vec<Vec<TileStack>> = sec_files
         .par_iter()
-        .filter_map(|path| parse_sector_file_stacks(path, global_min_sector_x, global_min_sector_y).ok())
+        .filter_map(|path| {
+            match parse_sector_file_stacks(path, global_min_sector_x, global_min_sector_y) {
+                Ok(tiles) => Some(tiles),
+                Err(e) => {
+                    tracing::warn!("Failed to parse sector {:?}: {}", path.file_name(), e);
+                    None
+                }
+            }
+        })
         .collect();
 
     let mut tiles: Vec<TileStack> = all_tiles.into_iter().flatten().collect();
@@ -123,7 +131,7 @@ fn parse_sector_file_stacks(
     let (sector_x, sector_y, _) = parse_sector_coords(filename)
         .ok_or_else(|| anyhow::anyhow!("Failed to parse sector coordinates"))?;
 
-    let content = fs::read_to_string(path)?;
+    let content = String::from_utf8_lossy(&fs::read(path)?).into_owned();
     let mut tiles = Vec::new();
 
     for line in content.lines() {
@@ -369,7 +377,18 @@ fn render_single_sprite_tile(
             continue;
         }
 
+        // Debug logging for problematic coordinates (scale==4 is zoom 2)
+        if scale == 4 && tile_x == 22 && tile_y == 15 && tile_stack.x >= 1408 && tile_stack.x <= 1415 && tile_stack.y >= 960 && tile_stack.y <= 965 {
+            tracing::debug!("Tile ({}, {}) scale {}: processing tile_stack at ({}, {}) with objects {:?}",
+                tile_x, tile_y, scale, tile_stack.x, tile_stack.y, tile_stack.object_ids);
+        }
+
         let layers = select_sprite_layers(&tile_stack.object_ids, objects);
+
+        // Debug logging for layer selection
+        if scale == 4 && tile_x == 22 && tile_y == 15 && tile_stack.x >= 1408 && tile_stack.x <= 1415 && tile_stack.y >= 960 && tile_stack.y <= 965 {
+            tracing::debug!("  -> Selected layers: {:?}", layers);
+        }
 
         for &obj_id in &layers {
             // Use DisguiseTarget sprite if object has one
