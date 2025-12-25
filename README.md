@@ -1,16 +1,16 @@
 # Demonax Mapper
 
-A high-performance map tile generator for Demonax/Tibia game servers. Generates zoomable web maps from game data using actual sprite images.
+Map tile generator for Demonax/Tibia game servers. Generates zoomable web maps from game data using sprite images.
 
 ## Features
 
-- **Sprite-based rendering** - Uses actual game sprites for authentic map visualization
+- **Sprite-based rendering** - Uses game sprites for map visualization
 - **Multi-zoom support** - Generates tiles at multiple zoom levels (0-5)
 - **Multi-floor support** - Generate maps for any floor (0-15)
 - **Monster spawn visualization** - Displays spawn points from monster.db with creature images
-- **Fast generation** - Optimized parallel processing with caching
+- **Parallel generation** - Optimized parallel processing with caching
 - **Web viewer** - Includes interactive HTML map viewer with Leaflet.js
-- **Correct Z-ordering** - Proper isometric rendering with accurate sprite layering
+- **Correct Z-ordering** - Isometric rendering with accurate sprite layering
 - **Map coordinate display** - Shows position hash and corresponding .sec file for each location
 
 ## Prerequisites
@@ -20,6 +20,30 @@ A high-performance map tile generator for Demonax/Tibia game servers. Generates 
   - `dat/objects.srv` - Object definitions
   - `map/*.sec` - Sector files
 - Sprite images (32x32 or 64x64 PNG files)
+
+Optional for additional features:
+- demonax-data repository (contains `game/dat/monster.db` and `csv/quest_overview.csv`)
+- Monster sprite PNG files named by race ID (e.g., `1.png`, `2.png`)
+
+## Input Files Structure
+
+### Game Data
+- `objects.srv`: Object definitions file from game server
+- `*.sec` files: Map sector files in `map/` directory
+
+### Sprite Images
+- PNG files named by object ID (e.g., `1234.png`)
+- Standard size: 32x32 pixels
+- Large sprites: 64x64, 64x32, or 32x64 pixels (walls, doors, trees)
+
+### Monster Data (optional)
+- `monster.db`: Monster spawn database from demonax-data repository
+- Monster sprite PNGs: Named by race ID (e.g., `1.png`, `2.png`)
+
+### Quest Data (optional)
+- `quest_overview.csv`: CSV file with columns `quest_value,quest_name`
+- Header row is skipped
+- Used to display quest names for quest chests
 
 ## Installation
 
