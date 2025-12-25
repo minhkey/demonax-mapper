@@ -228,13 +228,31 @@ fn cmd_build(
                 &game_path,
                 *floor,
                 global_min_sector_x,
-                global_min_sector_y
+                global_min_sector_y,
+                global_max_sector_x,
+                global_max_sector_y,
             )?;
             fs::write(&map_path, serde_json::to_string(&map_data)?)?;
             pb.finish_with_message(format!("Cached floor {} ({} tiles)", floor, map_data.tiles.len()));
         }
 
-        let map_data: SpriteMapData = serde_json::from_str(&fs::read_to_string(&map_path)?)?;
+        let mut map_data: SpriteMapData = serde_json::from_str(&fs::read_to_string(&map_path)?)?;
+        if map_data.version < 2 {
+            tracing::info!("Regenerating outdated cache for floor {}", floor);
+            let pb = ProgressBar::new_spinner();
+            pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
+            pb.set_message(format!("Parsing floor {} (outdated cache)...", floor));
+            map_data = parse_sprite_map(
+                &game_path,
+                *floor,
+                global_min_sector_x,
+                global_min_sector_y,
+                global_max_sector_x,
+                global_max_sector_y,
+            )?;
+            fs::write(&map_path, serde_json::to_string(&map_data)?)?;
+            pb.finish_with_message(format!("Cached floor {} ({} tiles)", floor, map_data.tiles.len()));
+        }
 
         let pb = ProgressBar::new_spinner();
         pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);

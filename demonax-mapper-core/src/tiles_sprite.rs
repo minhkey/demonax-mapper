@@ -23,6 +23,8 @@ pub struct SpriteMapData {
     pub max_sector_x: u32,
     pub min_sector_y: u32,
     pub max_sector_y: u32,
+    #[serde(default)]
+    pub version: u32,
 }
 
 pub fn parse_sprite_map<P: AsRef<Path>>(
@@ -30,6 +32,8 @@ pub fn parse_sprite_map<P: AsRef<Path>>(
     floor: u8,
     global_min_sector_x: u32,
     global_min_sector_y: u32,
+    global_max_sector_x: u32,
+    global_max_sector_y: u32,
 ) -> Result<SpriteMapData> {
     let map_dir = game_path.as_ref().join("map");
 
@@ -45,8 +49,6 @@ pub fn parse_sprite_map<P: AsRef<Path>>(
         })
         .collect();
 
-    let (floor_min_x, floor_max_x, floor_min_y, floor_max_y) =
-        calculate_bounds(&sec_files, floor)?;
 
     let all_tiles: Vec<Vec<TileStack>> = sec_files
         .par_iter()
@@ -71,10 +73,11 @@ pub fn parse_sprite_map<P: AsRef<Path>>(
     Ok(SpriteMapData {
         floor,
         tiles,
-        min_sector_x: floor_min_x,
-        max_sector_x: floor_max_x,
-        min_sector_y: floor_min_y,
-        max_sector_y: floor_max_y,
+        min_sector_x: global_min_sector_x,
+        max_sector_x: global_max_sector_x,
+        min_sector_y: global_min_sector_y,
+        max_sector_y: global_max_sector_y,
+        version: 2,
     })
 }
 
@@ -96,27 +99,6 @@ fn parse_sector_coords(filename: &str) -> Option<(u32, u32, u8)> {
     Some((x, y, z))
 }
 
-fn calculate_bounds(files: &[PathBuf], floor: u8) -> Result<(u32, u32, u32, u32)> {
-    let mut min_x = u32::MAX;
-    let mut max_x = 0;
-    let mut min_y = u32::MAX;
-    let mut max_y = 0;
-
-    for path in files {
-        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-            if let Some((x, y, z)) = parse_sector_coords(filename) {
-                if z == floor {
-                    min_x = min_x.min(x);
-                    max_x = max_x.max(x);
-                    min_y = min_y.min(y);
-                    max_y = max_y.max(y);
-                }
-            }
-        }
-    }
-
-    Ok((min_x, max_x, min_y, max_y))
-}
 
 fn parse_sector_file_stacks(
     path: &Path,
