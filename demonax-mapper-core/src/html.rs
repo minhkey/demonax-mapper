@@ -151,6 +151,12 @@ pub fn generate_html<P: AsRef<Path>>(
                 Show crosshair
             </label>
         </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="sector-grid-toggle" />
+                Show sector borders
+            </label>
+        </div>
         <div id="coords">
             X: <span id="coord-x">-</span>, Y: <span id="coord-y">-</span>, Z: <span id="coord-z">-</span> | <span id="sector-file">-</span>
         </div>
@@ -299,6 +305,9 @@ pub fn generate_html<P: AsRef<Path>>(
         let spawnData = null;
         let spawnMarkers = [];
 
+        // Sector grid overlay
+        let sectorGridLines = [];
+
         fetch('spawns.json')
             .then(response => {{
                 if (!response.ok) {{
@@ -437,6 +446,88 @@ pub fn generate_html<P: AsRef<Path>>(
             }});
         }}
 
+        function updateSectorGridLayer() {{
+            sectorGridLines.forEach(line => map.removeLayer(line));
+            sectorGridLines = [];
+
+            const toggle = document.getElementById('sector-grid-toggle');
+            const showGrid = toggle && toggle.checked;
+            const currentZoom = map.getZoom();
+
+            if (!showGrid || currentZoom < 3) {{
+                return;
+            }}
+
+            const bounds = map.getBounds();
+            const minTileX_view = Math.floor(bounds.getSouthWest().lng);
+            const maxTileX_view = Math.ceil(bounds.getNorthEast().lng);
+            const minTileY_view = Math.floor(bounds.getSouthWest().lat);
+            const maxTileY_view = Math.ceil(bounds.getNorthEast().lat);
+
+            const minWorldX_view = minTileX + minTileX_view;
+            const maxWorldX_view = minTileX + maxTileX_view;
+            const minWorldY_view = minTileY + minTileY_view;
+            const maxWorldY_view = minTileY + maxTileY_view;
+
+            const minSectorX = Math.floor(minWorldX_view / 32);
+            const maxSectorX = Math.ceil(maxWorldX_view / 32);
+            const minSectorY = Math.floor(minWorldY_view / 32);
+            const maxSectorY = Math.ceil(maxWorldY_view / 32);
+
+            const mapMinWorldX = minTileX;
+            const mapMaxWorldX = maxTileX;
+            const mapMinWorldY = minTileY;
+            const mapMaxWorldY = maxTileY;
+
+            for (let sectorX = minSectorX; sectorX <= maxSectorX; sectorX++) {{
+                const worldX = sectorX * 32;
+
+                if (worldX < mapMinWorldX || worldX > mapMaxWorldX) {{
+                    continue;
+                }}
+
+                const [latStart, lng] = worldToLatLng(worldX, Math.max(minWorldY_view, mapMinWorldY));
+                const [latEnd, _] = worldToLatLng(worldX, Math.min(maxWorldY_view, mapMaxWorldY));
+
+                const line = L.polyline(
+                    [[latStart, lng], [latEnd, lng]],
+                    {{
+                        color: '#00FFFF',
+                        weight: 1,
+                        opacity: 0.3,
+                        interactive: false
+                    }}
+                );
+
+                line.addTo(map);
+                sectorGridLines.push(line);
+            }}
+
+            for (let sectorY = minSectorY; sectorY <= maxSectorY; sectorY++) {{
+                const worldY = sectorY * 32;
+
+                if (worldY < mapMinWorldY || worldY > mapMaxWorldY) {{
+                    continue;
+                }}
+
+                const [lat, lngStart] = worldToLatLng(Math.max(minWorldX_view, mapMinWorldX), worldY);
+                const [_, lngEnd] = worldToLatLng(Math.min(maxWorldX_view, mapMaxWorldX), worldY);
+
+                const line = L.polyline(
+                    [[lat, lngStart], [lat, lngEnd]],
+                    {{
+                        color: '#00FFFF',
+                        weight: 1,
+                        opacity: 0.3,
+                        interactive: false
+                    }}
+                );
+
+                line.addTo(map);
+                sectorGridLines.push(line);
+            }}
+        }}
+
         const spawnToggle = document.getElementById('spawn-toggle');
         if (spawnToggle) {{
             spawnToggle.addEventListener('change', updateSpawnLayer);
@@ -459,14 +550,21 @@ pub fn generate_html<P: AsRef<Path>>(
             }});
         }}
 
+        const sectorGridToggle = document.getElementById('sector-grid-toggle');
+        if (sectorGridToggle) {{
+            sectorGridToggle.addEventListener('change', updateSectorGridLayer);
+        }}
+
         map.on('moveend', function() {{
             updateSpawnLayer();
             updateQuestChestLayer();
+            updateSectorGridLayer();
         }});
 
         map.on('zoomend', function() {{
             updateSpawnLayer();
             updateQuestChestLayer();
+            updateSectorGridLayer();
         }});
 
         const originalLoadFloor = loadFloor;
@@ -474,6 +572,7 @@ pub fn generate_html<P: AsRef<Path>>(
             originalLoadFloor(floor);
             updateSpawnLayer();
             updateQuestChestLayer();
+            updateSectorGridLayer();
         }};
     </script>
 </body>
