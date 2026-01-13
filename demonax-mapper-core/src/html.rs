@@ -106,6 +106,23 @@ pub fn generate_html<P: AsRef<Path>>(
         .control-group input[type="checkbox"] {{
             margin-right: 5px;
         }}
+        #crosshair {{
+            position: absolute;
+            top: calc(50% + 25px);
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }}
+        #crosshair.visible {{
+            display: block;
+        }}
+        #crosshair line {{
+            stroke: #00ff00;
+            stroke-width: 2;
+            stroke-linecap: round;
+        }}
     </style>
 </head>
 <body>
@@ -128,11 +145,21 @@ pub fn generate_html<P: AsRef<Path>>(
                 Show quest locations
             </label>
         </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="crosshair-toggle" />
+                Show crosshair
+            </label>
+        </div>
         <div id="coords">
             X: <span id="coord-x">-</span>, Y: <span id="coord-y">-</span>, Z: <span id="coord-z">-</span> | <span id="sector-file">-</span>
         </div>
     </div>
     <div id="map"></div>
+    <svg id="crosshair" width="40" height="40" viewBox="0 0 40 40">
+        <line x1="20" y1="5" x2="20" y2="35" />
+        <line x1="5" y1="20" x2="35" y2="20" />
+    </svg>
 
     <script>
         const floors = {floors_json};
@@ -418,6 +445,18 @@ pub fn generate_html<P: AsRef<Path>>(
         const questChestToggle = document.getElementById('questchest-toggle');
         if (questChestToggle) {{
             questChestToggle.addEventListener('change', updateQuestChestLayer);
+        }}
+
+        const crosshairToggle = document.getElementById('crosshair-toggle');
+        const crosshair = document.getElementById('crosshair');
+        if (crosshairToggle && crosshair) {{
+            crosshairToggle.addEventListener('change', function() {{
+                if (this.checked) {{
+                    crosshair.classList.add('visible');
+                }} else {{
+                    crosshair.classList.remove('visible');
+                }}
+            }});
         }}
 
         map.on('moveend', function() {{
