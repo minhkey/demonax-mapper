@@ -123,6 +123,25 @@ pub fn generate_html<P: AsRef<Path>>(
             stroke-width: 2;
             stroke-linecap: round;
         }}
+        #copy-toast {{
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }}
+        #copy-toast.show {{
+            opacity: 1;
+        }}
     </style>
 </head>
 <body>
@@ -166,6 +185,7 @@ pub fn generate_html<P: AsRef<Path>>(
         <line x1="20" y1="5" x2="20" y2="35" />
         <line x1="5" y1="20" x2="35" y2="20" />
     </svg>
+    <div id="copy-toast"></div>
 
     <script>
         const floors = {floors_json};
@@ -257,6 +277,10 @@ pub fn generate_html<P: AsRef<Path>>(
             loadFloor(currentFloor);
         }}
 
+        let lastWorldX = 0;
+        let lastWorldY = 0;
+        let lastSectorFile = '';
+
         map.on('mousemove', function(e) {{
             const latLng = e.latlng;
             const tileX = Math.floor(latLng.lng);
@@ -265,9 +289,14 @@ pub fn generate_html<P: AsRef<Path>>(
             const worldX = minTileX + tileX;
             const worldY = minTileY + tileY;
 
+            lastWorldX = worldX;
+            lastWorldY = worldY;
+
             const sectorX = Math.floor(worldX / 32);
             const sectorY = Math.floor(worldY / 32);
             const sectorFile = `${{sectorX.toString().padStart(4, '0')}}-${{sectorY.toString().padStart(4, '0')}}-${{currentFloor.toString().padStart(2, '0')}}.sec`;
+
+            lastSectorFile = sectorFile;
 
             document.getElementById('coord-x').textContent = worldX;
             document.getElementById('coord-y').textContent = worldY;
@@ -528,6 +557,27 @@ pub fn generate_html<P: AsRef<Path>>(
             }}
         }}
 
+        function showToast(message) {{
+            const toast = document.getElementById('copy-toast');
+            if (toast) {{
+                toast.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => {{
+                    toast.classList.remove('show');
+                }}, 2000);
+            }}
+        }}
+
+        async function copyToClipboard(text, label) {{
+            try {{
+                await navigator.clipboard.writeText(text);
+                showToast(`Copied: ${{label}}`);
+            }} catch (err) {{
+                console.error('Failed to copy:', err);
+                showToast('Copy failed - clipboard not available');
+            }}
+        }}
+
         const spawnToggle = document.getElementById('spawn-toggle');
         if (spawnToggle) {{
             spawnToggle.addEventListener('change', updateSpawnLayer);
@@ -554,6 +604,21 @@ pub fn generate_html<P: AsRef<Path>>(
         if (sectorGridToggle) {{
             sectorGridToggle.addEventListener('change', updateSectorGridLayer);
         }}
+
+        map.on('click', function(e) {{
+            if (e.originalEvent.ctrlKey || e.originalEvent.metaKey) {{
+                const coords = `${{lastWorldX}},${{lastWorldY}},${{currentFloor}}`;
+                copyToClipboard(coords, coords);
+                L.DomEvent.stopPropagation(e.originalEvent);
+            }}
+        }});
+
+        map.getContainer().addEventListener('mousedown', function(e) {{
+            if (e.button === 1) {{
+                copyToClipboard(lastSectorFile, lastSectorFile);
+                e.preventDefault();
+            }}
+        }});
 
         map.on('moveend', function() {{
             updateSpawnLayer();
