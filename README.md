@@ -27,6 +27,37 @@ Optional for additional features:
 
 ## Input Files Structure
 
+### Directory Layout Example
+
+```
+game/                           # Game server directory (GAME_PATH argument)
+├── dat/
+│   └── objects.srv            # Object definitions
+└── map/
+    ├── 0-0-7.sec              # Sector files
+    ├── 0-1-7.sec
+    └── ...
+
+sprites/                        # Sprite directory (--sprite-path argument)
+├── 1.png                      # Object sprite files named by object ID
+├── 2.png
+├── 1234.png
+└── ...
+
+demonax-data/                   # Optional: demonax-data repository (--data-path argument)
+├── game/
+│   └── dat/
+│       └── monster.db         # Monster spawn database
+└── csv/
+    └── quest_overview.csv     # Quest names (quest_value,quest_name)
+
+monster-sprites/                # Optional: Monster sprites (--monster-sprites argument)
+├── 1.png                      # Monster sprite files named by race ID
+├── 2.png
+├── 3.png
+└── ...
+```
+
 ### Game Data
 - `objects.srv`: Object definitions file from game server
 - `*.sec` files: Map sector files in `map/` directory
@@ -202,6 +233,9 @@ The generated interactive map includes:
 - **Coordinate Display** - Shows current mouse position in game coordinates (X, Y, Z)
 - **Position Hash** - Displays the position hash for the current location
 - **Sector File** - Shows the corresponding `.sec` file name for the current position
+- **Copy Coordinates** - Click on the map to copy coordinates and sector information to clipboard
+- **Toggle Crosshair** - Button to show/hide a crosshair at the center of the map
+- **Show Sector Borders** - Button to toggle visibility of sector boundary lines
 - **Monster Spawns** - Clickable markers showing spawn points with creature images (when `--data-path` and `--monster-sprites` are provided)
 - **Zoom Controls** - Navigate between 6 zoom levels with smooth transitions
 - **Pan & Zoom** - Click and drag to pan, scroll wheel to zoom
