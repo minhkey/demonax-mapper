@@ -266,6 +266,44 @@ output/
 
 ## Deployment
 
+### Server Requirements
+
+**No PHP or backend server required!** The map is pure static HTML/CSS/JavaScript and works with any static web hosting. However:
+
+- **Web server required**: You cannot open `index.html` directly in a browser (file:// protocol) because the map uses `fetch()` to load JSON data files, which requires HTTP/HTTPS
+- **Any static server works**: Python's `http.server`, Nginx, Apache, GitHub Pages, Netlify, Vercel, Cloudflare Pages, etc.
+- **CDN dependencies**: The map loads Leaflet.js from unpkg.com CDN, so users need internet access to view the map
+
+### Multiple Floors
+
+When generating multiple floors (e.g., `--floors 0-15`), all floors are included in a **single interactive map**:
+
+- All floor data is generated in subdirectories (e.g., `output/0/`, `output/7/`, `output/15/`)
+- The map includes a dropdown menu to switch between floors
+- Only one `index.html` file is generated - it handles all floors
+- Each floor maintains its own zoom levels and tiles
+- The URL hash updates when switching floors (e.g., `#1024,1024,7,3` for floor 7)
+
+**Example multi-floor output structure:**
+```
+output/
+├── index.html              # Single viewer for all floors
+├── spawns.json            # All monster spawns across floors
+├── questchests.json       # All quest chests across floors
+├── monsters/              # Shared monster sprites
+├── 0/                     # Floor 0 tiles
+│   ├── 0/                 # Zoom level 0
+│   ├── 1/                 # Zoom level 1
+│   └── ...
+├── 7/                     # Floor 7 tiles (ground level)
+│   ├── 0/
+│   └── ...
+├── 8/                     # Floor 8 tiles
+│   └── ...
+└── 15/                    # Floor 15 tiles
+    └── ...
+```
+
 ### Deploying to a Quarto Website
 
 To deploy the map to a Quarto-based website (like demonax-web):
@@ -275,13 +313,13 @@ To deploy the map to a Quarto-based website (like demonax-web):
    ./target/release/demonax-mapper build \
        /path/to/game \
        --sprite-path /path/to/sprites \
-       --floors 7 \
+       --floors 0-15 \
        --data-path /path/to/demonax-data \
        --monster-sprites /path/to/monster-sprites \
        --output /tmp/map-output
    ```
 
-2. Copy the generated files to the website's dynamic directory:
+2. Copy the generated files to the website's resources directory:
    ```bash
    # Copy to the Quarto project's resources directory
    mkdir -p ~/repos/demonax-web/dynamic/map
@@ -303,9 +341,83 @@ project:
     - "dynamic"
 ```
 
+#### Embedding the Map in Quarto Pages
+
+You have two options for including the map in your Quarto pages:
+
+**Option 1: Direct link** (simplest)
+```markdown
+[View Interactive Map](/dynamic/map/index.html)
+```
+
+**Option 2: Embedded iframe** (shows map inline)
+```markdown
+<iframe src="/dynamic/map/index.html"
+        width="100%"
+        height="600px"
+        style="border: 1px solid #ccc;">
+</iframe>
+```
+
+**Option 3: Full-page iframe** (recommended for best experience)
+```markdown
+<iframe src="/dynamic/map/index.html"
+        width="100%"
+        height="100vh"
+        style="border: none; position: absolute; top: 0; left: 0;">
+</iframe>
+```
+
+For a full-page map experience, create a dedicated Quarto page (e.g., `map.qmd`) with minimal styling:
+
+```yaml
+---
+title: "Interactive Map"
+format:
+  html:
+    page-layout: custom
+---
+
+<iframe src="/dynamic/map/index.html"
+        width="100%"
+        height="100vh"
+        style="border: none;">
+</iframe>
+```
+
+#### Linking to Specific Locations
+
+You can link directly to specific map coordinates using URL hash parameters:
+
+```markdown
+[View spawn point at X=1024, Y=1024, Floor 7, Zoom 4](/dynamic/map/index.html#1024,1024,7,4)
+```
+
+Format: `#X,Y,Z,ZOOM` where:
+- X, Y = world coordinates
+- Z = floor number
+- ZOOM = zoom level (0-5)
+
 ### Deploying to Static Web Hosting
 
 The output can be deployed to any static web host (GitHub Pages, Netlify, Vercel, etc.) by simply uploading the contents of the output directory.
+
+**Example for GitHub Pages:**
+
+```bash
+# Generate map
+./target/release/demonax-mapper build /path/to/game --sprite-path /path/to/sprites --floors 0-15 --output ./gh-pages
+
+# Deploy
+cd gh-pages
+git init
+git add .
+git commit -m "Deploy map"
+git remote add origin https://github.com/yourusername/your-map-repo.git
+git push -u origin main
+```
+
+Then enable GitHub Pages in your repository settings, pointing to the `main` branch.
 
 ## Caching
 
