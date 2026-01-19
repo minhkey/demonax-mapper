@@ -28,14 +28,14 @@ pub struct SpriteMapData {
 }
 
 pub fn parse_sprite_map<P: AsRef<Path>>(
-    game_path: P,
+    map_dir: P,
     floor: u8,
     global_min_sector_x: u32,
     global_min_sector_y: u32,
     global_max_sector_x: u32,
     global_max_sector_y: u32,
 ) -> Result<SpriteMapData> {
-    let map_dir = game_path.as_ref().join("map");
+    let map_dir = map_dir.as_ref();
 
     let sec_files: Vec<PathBuf> = fs::read_dir(&map_dir)
         .with_context(|| format!("Failed to read map directory: {:?}", map_dir))?

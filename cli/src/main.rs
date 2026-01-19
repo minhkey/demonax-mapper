@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use demonax_mapper_core::*;
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon;
 use std::path::PathBuf;
 use std::fs;
 
@@ -27,10 +28,13 @@ enum Commands {
     },
 
     Build {
-        #[arg(help = "Path to game directory")]
-        game_path: PathBuf,
+        #[arg(long, help = "Path to objects.srv file")]
+        objects_path: PathBuf,
 
-        #[arg(short, long, help = "Path to sprite directory")]
+        #[arg(long, help = "Path to map directory with .sec files")]
+        map_path: PathBuf,
+
+        #[arg(long, help = "Path to sprite PNG directory")]
         sprite_path: PathBuf,
 
         #[arg(short, long, default_value = "output")]
@@ -45,11 +49,20 @@ enum Commands {
         #[arg(long, default_value = "5")]
         max_zoom: u8,
 
-        #[arg(long, help = "Path to demonax-data repository (for monster.db)")]
-        data_path: Option<PathBuf>,
+        #[arg(long, help = "Path to monster.db file")]
+        monster_db: Option<PathBuf>,
 
-        #[arg(long, help = "Path to monster sprite directory (PNG files named by race ID)")]
+        #[arg(long, help = "Path to directory with .mon files for monster names")]
+        monster_names_dir: Option<PathBuf>,
+
+        #[arg(long, help = "Path to monster sprite PNG directory")]
         monster_sprites: Option<PathBuf>,
+
+        #[arg(long, help = "Path to quest_overview.csv file")]
+        quest_csv: Option<PathBuf>,
+
+        #[arg(short = 'j', long, help = "Number of worker threads (default: all cores)")]
+        threads: Option<usize>,
     },
 }
 
@@ -73,16 +86,33 @@ fn main() -> Result<()> {
             cmd_parse_objects(input, output)?;
         }
         Commands::Build {
-            game_path,
+            objects_path,
+            map_path,
             sprite_path,
             output,
             floors,
             min_zoom,
             max_zoom,
-            data_path,
+            monster_db,
+            monster_names_dir,
             monster_sprites,
+            quest_csv,
+            threads,
         } => {
-            cmd_build(game_path, sprite_path, output, floors, min_zoom, max_zoom, data_path, monster_sprites)?;
+            cmd_build(
+                objects_path,
+                map_path,
+                sprite_path,
+                output,
+                floors,
+                min_zoom,
+                max_zoom,
+                monster_db,
+                monster_names_dir,
+                monster_sprites,
+                quest_csv,
+                threads,
+            )?;
         }
     }
 
@@ -152,33 +182,56 @@ fn calculate_global_bounds(
 }
 
 fn cmd_build(
-    game_path: PathBuf,
+    objects_path: PathBuf,
+    map_path: PathBuf,
     sprite_path: PathBuf,
     output: PathBuf,
     floors_str: String,
     min_zoom: u8,
     max_zoom: u8,
-    data_path: Option<PathBuf>,
+    monster_db: Option<PathBuf>,
+    monster_names_dir: Option<PathBuf>,
     monster_sprites: Option<PathBuf>,
+    quest_csv: Option<PathBuf>,
+    threads: Option<usize>,
 ) -> Result<()> {
+    // Configure thread pool if --threads is specified
+    if let Some(num_threads) = threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build_global()
+            .ok(); // Ignore error if pool already initialized
+    }
+
+    // Validate required paths
+    if !objects_path.exists() {
+        anyhow::bail!("Objects file not found: {:?}", objects_path);
+    }
+    if !map_path.exists() || !map_path.is_dir() {
+        anyhow::bail!("Map directory not found: {:?}", map_path);
+    }
+    if !sprite_path.exists() || !sprite_path.is_dir() {
+        anyhow::bail!("Sprite directory not found: {:?}", sprite_path);
+    }
+
     let floors = parse_floor_range(&floors_str)?;
 
     let cache_dir = PathBuf::from(".demonax-cache");
     fs::create_dir_all(&cache_dir.join("maps"))?;
     fs::create_dir_all(&output)?;
 
-    let objects_path = cache_dir.join("objects.json");
+    let objects_cache_path = cache_dir.join("objects.json");
 
-    if !objects_path.exists() {
+    if !objects_cache_path.exists() {
         let pb = ProgressBar::new_spinner();
         pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
         pb.set_message("Parsing objects.srv...");
-        let objects = parse_objects(game_path.join("dat/objects.srv"))?;
-        fs::write(&objects_path, serde_json::to_string(&objects)?)?;
+        let objects = parse_objects(&objects_path)?;
+        fs::write(&objects_cache_path, serde_json::to_string(&objects)?)?;
         pb.finish_with_message(format!("Cached {} objects", objects.len()));
     }
 
-    let objects: ObjectDatabase = serde_json::from_str(&fs::read_to_string(&objects_path)?)?;
+    let objects: ObjectDatabase = serde_json::from_str(&fs::read_to_string(&objects_cache_path)?)?;
 
     let pb = ProgressBar::new_spinner();
     pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
@@ -207,9 +260,8 @@ fn cmd_build(
     pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
     pb.set_message("Calculating map bounds...");
 
-    let map_dir = game_path.join("map");
     let (global_min_sector_x, global_max_sector_x, global_min_sector_y, global_max_sector_y) =
-        calculate_global_bounds(&map_dir, &floors)?;
+        calculate_global_bounds(&map_path, &floors)?;
 
     pb.finish_with_message(format!(
         "Map bounds: sectors ({}-{}, {}-{})",
@@ -218,39 +270,39 @@ fn cmd_build(
     ));
 
     for floor in &floors {
-        let map_path = cache_dir.join(format!("maps/floor_{:02}_sprite.json", floor));
+        let map_cache_path = cache_dir.join(format!("maps/floor_{:02}_sprite.json", floor));
 
-        if !map_path.exists() {
+        if !map_cache_path.exists() {
             let pb = ProgressBar::new_spinner();
             pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
             pb.set_message(format!("Parsing floor {}...", floor));
             let map_data = parse_sprite_map(
-                &game_path,
+                &map_path,
                 *floor,
                 global_min_sector_x,
                 global_min_sector_y,
                 global_max_sector_x,
                 global_max_sector_y,
             )?;
-            fs::write(&map_path, serde_json::to_string(&map_data)?)?;
+            fs::write(&map_cache_path, serde_json::to_string(&map_data)?)?;
             pb.finish_with_message(format!("Cached floor {} ({} tiles)", floor, map_data.tiles.len()));
         }
 
-        let mut map_data: SpriteMapData = serde_json::from_str(&fs::read_to_string(&map_path)?)?;
+        let mut map_data: SpriteMapData = serde_json::from_str(&fs::read_to_string(&map_cache_path)?)?;
         if map_data.version < 2 {
             tracing::info!("Regenerating outdated cache for floor {}", floor);
             let pb = ProgressBar::new_spinner();
             pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
             pb.set_message(format!("Parsing floor {} (outdated cache)...", floor));
             map_data = parse_sprite_map(
-                &game_path,
+                &map_path,
                 *floor,
                 global_min_sector_x,
                 global_min_sector_y,
                 global_max_sector_x,
                 global_max_sector_y,
             )?;
-            fs::write(&map_path, serde_json::to_string(&map_data)?)?;
+            fs::write(&map_cache_path, serde_json::to_string(&map_data)?)?;
             pb.finish_with_message(format!("Cached floor {} ({} tiles)", floor, map_data.tiles.len()));
         }
 
@@ -276,15 +328,13 @@ fn cmd_build(
 
     generate_html(&output, &floors, min_zoom, max_zoom, min_tile_x, max_tile_x, min_tile_y, max_tile_y)?;
 
-    let data_path_clone = data_path.clone();
-
-    if let (Some(data_path), Some(monster_sprites)) = (data_path, monster_sprites) {
+    // Process monster data if both monster_db and monster_sprites are provided
+    if let (Some(monster_db_path), Some(monster_sprites_dir)) = (&monster_db, &monster_sprites) {
         let pb = ProgressBar::new_spinner();
         pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
         pb.set_message("Parsing monster data...");
 
-        let monster_db_path = data_path.join("game/dat/monster.db");
-        let spawns = parse_monster_db(&monster_db_path)?;
+        let spawns = parse_monster_db(monster_db_path)?;
 
         pb.set_message("Copying monster sprites...");
         let monsters_dir = output.join("monsters");
@@ -294,7 +344,7 @@ fn cmd_build(
         let mut copied_count = 0;
         for spawn in &spawns {
             let race_id = spawn.race;
-            let src = monster_sprites.join(format!("{}.png", race_id));
+            let src = monster_sprites_dir.join(format!("{}.png", race_id));
             let dst = monsters_dir.join(format!("{}.png", race_id));
 
             if src.exists() {
@@ -306,10 +356,9 @@ fn cmd_build(
         }
 
         pb.set_message("Loading monster names...");
-        let monster_names = {
-            let mon_dir = data_path.join("game/mon");
+        let monster_names = if let Some(ref mon_dir) = monster_names_dir {
             if mon_dir.exists() {
-                match parse_monster_names(&mon_dir) {
+                match parse_monster_names(mon_dir) {
                     Ok(names) => names,
                     Err(e) => {
                         tracing::warn!("Failed to load monster names: {}", e);
@@ -317,9 +366,11 @@ fn cmd_build(
                     }
                 }
             } else {
-                tracing::warn!("Monster directory not found: {:?}", mon_dir);
+                tracing::warn!("Monster names directory not found: {:?}", mon_dir);
                 Default::default()
             }
+        } else {
+            Default::default()
         };
 
         pb.set_message("Generating spawn data...");
@@ -337,11 +388,10 @@ fn cmd_build(
     pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
     pb.set_message("Parsing quest chests...");
 
-    let quest_names = if let Some(ref data_path) = data_path_clone {
-        let quest_csv_path = data_path.join("csv/quest_overview.csv");
+    let quest_names = if let Some(ref quest_csv_path) = quest_csv {
         if quest_csv_path.exists() {
             pb.set_message("Loading quest names from CSV...");
-            match parse_quest_csv(&quest_csv_path) {
+            match parse_quest_csv(quest_csv_path) {
                 Ok(names) => names,
                 Err(e) => {
                     tracing::warn!("Failed to load quest names: {}", e);
@@ -349,13 +399,14 @@ fn cmd_build(
                 }
             }
         } else {
+            tracing::warn!("Quest CSV not found: {:?}", quest_csv_path);
             Default::default()
         }
     } else {
         Default::default()
     };
 
-    let quest_chests = parse_questchests_from_sectors(&map_dir, &floors, &quest_names)?;
+    let quest_chests = parse_questchests_from_sectors(&map_path, &floors, &quest_names)?;
 
     pb.set_message("Generating quest chest data...");
     let questchests_json = generate_questchests_json(&quest_chests, &floors)?;

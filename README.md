@@ -1,57 +1,61 @@
-# Demonax Mapper
+# Demonax mapper
 
-Map tile generator for Demonax/Tibia game servers. Generates zoomable web maps from game data using sprite images.
+Map tile generator for Demonax/Tibia-style game servers. Generates zoomable web maps from game data using sprite images.
 
 ## Features
 
-- **Sprite-based rendering** - Uses game sprites for map visualization
-- **Multi-zoom support** - Generates tiles at multiple zoom levels (0-5)
-- **Multi-floor support** - Generate maps for any floor (0-15)
-- **Monster spawn visualization** - Displays spawn points from monster.db with creature images
-- **Parallel generation** - Optimized parallel processing with caching
-- **Web viewer** - Includes interactive HTML map viewer with Leaflet.js
-- **Correct Z-ordering** - Isometric rendering with accurate sprite layering
-- **Map coordinate display** - Shows position hash and corresponding .sec file for each location
+- **Sprite-based rendering**: Uses game sprites for map visualization
+- **Multi-zoom support**: Generates tiles at multiple zoom levels (0-5)
+- **Multi-floor support**: Generate maps for any floor (0-15)
+- **Monster spawn visualization**: Displays spawn points from `monster.db` with creature images
+- **Parallel generation**: Optimized parallel processing with caching
+- **Web viewer**: Includes interactive HTML map viewer with Leaflet.js
+- **Map coordinate display**: Shows position hash and corresponding `.sec` file for each location
+- **Quest locations**: Clickable button shows quest locations
 
 ## Prerequisites
 
 - Rust 2024 edition or later
 - Game server files:
-  - `dat/objects.srv` - Object definitions
-  - `map/*.sec` - Sector files
+  - `objects.srv` for object definitions
+  - `map/*.sec` for map sector files
 - Sprite images (32x32 or 64x64 PNG files)
 
 Optional for additional features:
-- demonax-data repository (contains `game/dat/monster.db` and `csv/quest_overview.csv`)
+- `monster.db` for monster spawn data
 - Monster sprite PNG files named by race ID (e.g., `1.png`, `2.png`)
+- `quest_overview.csv` for quest names
 
-## Input Files Structure
+## Input files structure
 
-### Directory Layout Example
+### Directory layout example
 
 ```
-game/                           # Game server directory (GAME_PATH argument)
+game/                           # Game server directory
 ├── dat/
-│   └── objects.srv            # Object definitions
-└── map/
+│   └── objects.srv            # Object definitions (--objects-path)
+└── map/                       # Map directory (--map-path)
     ├── 0-0-7.sec              # Sector files
     ├── 0-1-7.sec
     └── ...
 
-sprites/                        # Sprite directory (--sprite-path argument)
+sprites/                        # Sprite directory (--sprite-path)
 ├── 1.png                      # Object sprite files named by object ID
 ├── 2.png
 ├── 1234.png
 └── ...
 
-demonax-data/                   # Optional: demonax-data repository (--data-path argument)
+demonax-data/                   # Optional: demonax-data repository
 ├── game/
-│   └── dat/
-│       └── monster.db         # Monster spawn database
+│   ├── dat/
+│   │   └── monster.db         # Monster spawn database (--monster-db)
+│   └── mon/                   # Monster names directory (--monster-names-dir)
+│       ├── 1.mon
+│       └── ...
 └── csv/
-    └── quest_overview.csv     # Quest names (quest_value,quest_name)
+    └── quest_overview.csv     # Quest names (--quest-csv)
 
-monster-sprites/                # Optional: Monster sprites (--monster-sprites argument)
+monster-sprites/                # Optional: Monster sprites (--monster-sprites)
 ├── 1.png                      # Monster sprite files named by race ID
 ├── 2.png
 ├── 3.png
@@ -68,7 +72,8 @@ monster-sprites/                # Optional: Monster sprites (--monster-sprites a
 - Large sprites: 64x64, 64x32, or 32x64 pixels (walls, doors, trees)
 
 ### Monster Data (optional)
-- `monster.db`: Monster spawn database from demonax-data repository
+- `monster.db`: Monster spawn database
+- `.mon` files: Monster name definitions
 - Monster sprite PNGs: Named by race ID (e.g., `1.png`, `2.png`)
 
 ### Quest Data (optional)
@@ -100,7 +105,8 @@ Generate a map for floor 7 with default zoom levels (0-5):
 
 ```bash
 ./target/release/demonax-mapper build \
-    /path/to/game \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
     --sprite-path /path/to/sprites \
     --floors 7
 ```
@@ -111,18 +117,10 @@ Generate maps for floors 0-15:
 
 ```bash
 ./target/release/demonax-mapper build \
-    /path/to/game \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
     --sprite-path /path/to/sprites \
     --floors 0-15
-```
-
-Or specific floors:
-
-```bash
-./target/release/demonax-mapper build \
-    /path/to/game \
-    --sprite-path /path/to/sprites \
-    --floors "0,7,8,15"
 ```
 
 ### Custom Zoom Levels
@@ -131,7 +129,8 @@ Generate only specific zoom levels:
 
 ```bash
 ./target/release/demonax-mapper build \
-    /path/to/game \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
     --sprite-path /path/to/sprites \
     --floors 7 \
     --min-zoom 3 \
@@ -142,7 +141,8 @@ Generate only specific zoom levels:
 
 ```bash
 ./target/release/demonax-mapper build \
-    /path/to/game \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
     --sprite-path /path/to/sprites \
     --floors 7 \
     --output my-map
@@ -154,18 +154,31 @@ Generate map with monster spawn points:
 
 ```bash
 ./target/release/demonax-mapper build \
-    /path/to/game \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
     --sprite-path /path/to/sprites \
     --floors 7 \
-    --data-path /path/to/demonax-data \
+    --monster-db /path/to/monster.db \
+    --monster-names-dir /path/to/mon \
     --monster-sprites /path/to/monster-sprites
 ```
 
 Monster spawns will be displayed as markers on the map with creature images.
 
-**Note:** Both `--data-path` and `--monster-sprites` are required for monster spawn visualization:
-- `--data-path` points to the demonax-data repository (looks for `game/dat/monster.db` inside)
-- `--monster-sprites` points to a directory containing PNG files named by race ID (e.g., `1.png`, `2.png`)
+**Note:** Both `--monster-db` and `--monster-sprites` are required for monster spawn visualization.
+
+### Controlling Thread Count
+
+By default, the mapper uses all available CPU cores. You can limit this with `--threads` or `-j`:
+
+```bash
+./target/release/demonax-mapper build \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
+    --sprite-path /path/to/sprites \
+    --floors 0-15 \
+    --threads 4
+```
 
 ### Verbose Output
 
@@ -189,18 +202,22 @@ Add `-v` flags for more detailed logging:
 Main command for generating map tiles.
 
 **Required arguments:**
-- `<GAME_PATH>` - Path to game directory (contains `dat/` and `map/`)
-- `--sprite-path <PATH>` - Path to directory containing sprite PNG files
+- `--objects-path <FILE>` - Path to objects.srv file
+- `--map-path <DIR>` - Path to map directory containing .sec files
+- `--sprite-path <DIR>` - Path to directory containing sprite PNG files
 - `--floors <RANGE>` - Floor numbers to generate (e.g., `7` or `0-15`)
 
 **Optional arguments:**
 - `--output <PATH>` - Output directory (default: `output`)
 - `--min-zoom <LEVEL>` - Minimum zoom level (default: `0`)
 - `--max-zoom <LEVEL>` - Maximum zoom level (default: `5`)
-- `--data-path <PATH>` - Path to demonax-data repository (for monster.db)
-- `--monster-sprites <PATH>` - Path to monster sprite directory (PNG files named by race ID)
+- `--monster-db <FILE>` - Path to monster.db file
+- `--monster-names-dir <DIR>` - Path to directory with .mon files for monster names
+- `--monster-sprites <DIR>` - Path to monster sprite directory (PNG files named by race ID)
+- `--quest-csv <FILE>` - Path to quest_overview.csv file
+- `--threads <N>` / `-j <N>` - Number of worker threads (default: all cores)
 
-**Note:** Both `--data-path` and `--monster-sprites` must be provided together to enable monster spawn visualization.
+**Note:** Both `--monster-db` and `--monster-sprites` must be provided together to enable monster spawn visualization.
 
 ### `parse-objects`
 
@@ -210,6 +227,22 @@ Parse objects.srv file (rarely needed - happens automatically):
 ./target/release/demonax-mapper parse-objects \
     /path/to/game/dat/objects.srv \
     --output .demonax-cache/objects.json
+```
+
+## Full Example
+
+```bash
+./target/release/demonax-mapper build \
+    --objects-path /path/to/objects.srv \
+    --map-path /path/to/map \
+    --sprite-path /path/to/sprites \
+    --monster-db /path/to/monster.db \
+    --monster-names-dir /path/to/mon \
+    --monster-sprites /path/to/outfits \
+    --quest-csv /path/to/quest_overview.csv \
+    --threads 4 \
+    --floors 0-15 \
+    --output ./output
 ```
 
 ## Testing Locally
@@ -236,7 +269,7 @@ The generated interactive map includes:
 - **Copy Coordinates** - Click on the map to copy coordinates and sector information to clipboard
 - **Toggle Crosshair** - Button to show/hide a crosshair at the center of the map
 - **Show Sector Borders** - Button to toggle visibility of sector boundary lines
-- **Monster Spawns** - Clickable markers showing spawn points with creature images (when `--data-path` and `--monster-sprites` are provided)
+- **Monster Spawns** - Clickable markers showing spawn points with creature images (when `--monster-db` and `--monster-sprites` are provided)
 - **Zoom Controls** - Navigate between 6 zoom levels with smooth transitions
 - **Pan & Zoom** - Click and drag to pan, scroll wheel to zoom
 
@@ -247,7 +280,7 @@ After generation, the output directory contains:
 ```
 output/
 ├── index.html          # Interactive map viewer
-├── spawns.json         # Monster spawn data (optional, when using --data-path)
+├── spawns.json         # Monster spawn data (optional, when using --monster-db)
 ├── monsters/           # Monster sprite images (optional, when using --monster-sprites)
 │   ├── 1.png          # PNG files named by race ID
 │   ├── 2.png
@@ -311,11 +344,14 @@ To deploy the map to a Quarto-based website (like demonax-web):
 1. Generate the map with your desired settings:
    ```bash
    ./target/release/demonax-mapper build \
-       /path/to/game \
+       --objects-path /path/to/game/dat/objects.srv \
+       --map-path /path/to/game/map \
        --sprite-path /path/to/sprites \
        --floors 0-15 \
-       --data-path /path/to/demonax-data \
+       --monster-db /path/to/monster.db \
+       --monster-names-dir /path/to/mon \
        --monster-sprites /path/to/monster-sprites \
+       --quest-csv /path/to/quest_overview.csv \
        --output /tmp/map-output
    ```
 
@@ -406,7 +442,12 @@ The output can be deployed to any static web host (GitHub Pages, Netlify, Vercel
 
 ```bash
 # Generate map
-./target/release/demonax-mapper build /path/to/game --sprite-path /path/to/sprites --floors 0-15 --output ./gh-pages
+./target/release/demonax-mapper build \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
+    --sprite-path /path/to/sprites \
+    --floors 0-15 \
+    --output ./gh-pages
 
 # Deploy
 cd gh-pages
@@ -438,6 +479,8 @@ Typical performance for a single floor at zoom levels 0-5:
 - ~30-35 seconds for ~36,000 tiles
 - Utilizes parallel processing for optimal speed
 - Memory usage scales with sprite cache size
+
+You can control the number of threads used with `--threads` / `-j` argument.
 
 ## Rendering Details
 
@@ -483,6 +526,7 @@ Try:
 - Generating one floor at a time
 - Reducing the zoom level range
 - Increasing system memory
+- Reducing thread count with `--threads`
 
 ### Sprites cut off at map edges
 
