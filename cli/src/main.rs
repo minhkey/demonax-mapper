@@ -53,7 +53,7 @@ enum Commands {
         monster_db: Option<PathBuf>,
 
         #[arg(long, help = "Path to directory with .mon files for monster names")]
-        monster_names_dir: Option<PathBuf>,
+        mon_path: Option<PathBuf>,
 
         #[arg(long, help = "Path to monster sprite PNG directory")]
         monster_sprites: Option<PathBuf>,
@@ -94,7 +94,7 @@ fn main() -> Result<()> {
             min_zoom,
             max_zoom,
             monster_db,
-            monster_names_dir,
+            mon_path,
             monster_sprites,
             quest_csv,
             threads,
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
                 min_zoom,
                 max_zoom,
                 monster_db,
-                monster_names_dir,
+                mon_path,
                 monster_sprites,
                 quest_csv,
                 threads,
@@ -190,7 +190,7 @@ fn cmd_build(
     min_zoom: u8,
     max_zoom: u8,
     monster_db: Option<PathBuf>,
-    monster_names_dir: Option<PathBuf>,
+    mon_path: Option<PathBuf>,
     monster_sprites: Option<PathBuf>,
     quest_csv: Option<PathBuf>,
     threads: Option<usize>,
@@ -356,7 +356,7 @@ fn cmd_build(
         }
 
         pb.set_message("Loading monster names...");
-        let monster_names = if let Some(ref mon_dir) = monster_names_dir {
+        let monster_names = if let Some(ref mon_dir) = mon_path {
             if mon_dir.exists() {
                 match parse_monster_names(mon_dir) {
                     Ok(names) => names,
