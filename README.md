@@ -12,6 +12,20 @@ A map generator for Tibia-style game servers that generates zoomable [Leaflet](h
 - **Quest locations**: Optionally shows locations of in-game quest items
 - **Copy coordinates and sector names**: Middle click to copy the current sector name (e.g., `1011-1006-07.sec`), or Ctrl+Left click on the map to copy current coordinates (e.g., `32368,32215,7`)
 
+## Screenshots
+
+![](assets/mapper_1.png) 
+
+![](assets/mapper_2.png) 
+
+![](assets/mapper_3.png) 
+
+![](assets/mapper_4.png) 
+
+![](assets/mapper_5.png) 
+
+![](assets/mapper_6.png) 
+
 ## Prerequisites
 
 - Rust 2024 edition or later
