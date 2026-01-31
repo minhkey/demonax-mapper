@@ -228,11 +228,20 @@ pub fn generate_html<P: AsRef<Path>>(
             attributionControl: false
         }});
 
+        function toTitleCase(str) {{
+            return str.split(' ').map(word =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+        }}
+
         function parseHash() {{
             const hash = window.location.hash.substring(1);
             if (!hash) return null;
 
-            const parts = hash.split(',');
+            // Split hash and query parameters
+            const [coords, queryString] = hash.split('?');
+            const parts = coords.split(',');
+
             if (parts.length !== 4) return null;
 
             const [x, y, z, zoom] = parts.map(p => parseInt(p, 10));
@@ -241,7 +250,16 @@ pub fn generate_html<P: AsRef<Path>>(
             if (!floors.includes(z)) return null;
             if (zoom < minZoom || zoom > maxZoom) return null;
 
-            return {{ x, y, z, zoom }};
+            // Parse query parameters for toggle states
+            const toggles = {{}};
+            if (queryString) {{
+                queryString.split('&').forEach(param => {{
+                    const [key, value] = param.split('=');
+                    toggles[key] = value === '1';
+                }});
+            }}
+
+            return {{ x, y, z, zoom, toggles }};
         }}
 
         function worldToTile(worldX, worldY) {{
@@ -260,7 +278,22 @@ pub fn generate_html<P: AsRef<Path>>(
             const worldX = minTileX + tileX;
             const worldY = minTileY + tileY;
 
-            const hash = `#${{worldX}},${{worldY}},${{currentFloor}},${{zoom}}`;
+            // Collect toggle states
+            const toggleStates = [];
+            const spawnToggle = document.getElementById('spawn-toggle');
+            const npcToggle = document.getElementById('npc-toggle');
+            const questToggle = document.getElementById('questchest-toggle');
+            const crosshairToggle = document.getElementById('crosshair-toggle');
+            const gridToggle = document.getElementById('sector-grid-toggle');
+
+            if (spawnToggle && spawnToggle.checked) toggleStates.push('spawns=1');
+            if (npcToggle && npcToggle.checked) toggleStates.push('npcs=1');
+            if (questToggle && questToggle.checked) toggleStates.push('quests=1');
+            if (crosshairToggle && crosshairToggle.checked) toggleStates.push('crosshair=1');
+            if (gridToggle && gridToggle.checked) toggleStates.push('grid=1');
+
+            const queryString = toggleStates.length > 0 ? '?' + toggleStates.join('&') : '';
+            const hash = `#${{worldX}},${{worldY}},${{currentFloor}},${{zoom}}${{queryString}}`;
             history.replaceState(null, '', hash);
         }}
 
@@ -293,6 +326,40 @@ pub fn generate_html<P: AsRef<Path>>(
         }} else {{
             map.setView([({max_tile_y} - {min_tile_y}) / 2, ({max_tile_x} - {min_tile_x}) / 2], 0);
             loadFloor(currentFloor);
+        }}
+
+        // Apply saved toggle states from URL
+        if (hashParams && hashParams.toggles) {{
+            const {{ toggles }} = hashParams;
+
+            const spawnToggle = document.getElementById('spawn-toggle');
+            if (spawnToggle && toggles.spawns !== undefined) {{
+                spawnToggle.checked = toggles.spawns;
+            }}
+
+            const npcToggle = document.getElementById('npc-toggle');
+            if (npcToggle && toggles.npcs !== undefined) {{
+                npcToggle.checked = toggles.npcs;
+            }}
+
+            const questToggle = document.getElementById('questchest-toggle');
+            if (questToggle && toggles.quests !== undefined) {{
+                questToggle.checked = toggles.quests;
+            }}
+
+            const crosshairToggle = document.getElementById('crosshair-toggle');
+            const crosshair = document.getElementById('crosshair');
+            if (crosshairToggle && crosshair && toggles.crosshair !== undefined) {{
+                crosshairToggle.checked = toggles.crosshair;
+                if (toggles.crosshair) {{
+                    crosshair.classList.add('visible');
+                }}
+            }}
+
+            const gridToggle = document.getElementById('sector-grid-toggle');
+            if (gridToggle && toggles.grid !== undefined) {{
+                gridToggle.checked = toggles.grid;
+            }}
         }}
 
         let lastWorldX = 0;
@@ -465,7 +532,7 @@ pub fn generate_html<P: AsRef<Path>>(
 
                 const marker = L.marker([lat, lng], {{ icon: icon }})
                     .bindPopup(`
-                        <b>${{spawn.name ? spawn.name.charAt(0).toUpperCase() + spawn.name.slice(1) + ' (ID: ' + spawn.race + ')' : 'Race ID: ' + spawn.race}}</b><br/>
+                        <b>${{spawn.name ? toTitleCase(spawn.name) : 'Race ID: ' + spawn.race}}</b><br/>
                         Spawn amount: ${{spawn.amount}}<br/>
                         Position: ${{spawn.x}}, ${{spawn.y}}
                     `);
@@ -661,17 +728,26 @@ pub fn generate_html<P: AsRef<Path>>(
 
         const spawnToggle = document.getElementById('spawn-toggle');
         if (spawnToggle) {{
-            spawnToggle.addEventListener('change', updateSpawnLayer);
+            spawnToggle.addEventListener('change', function() {{
+                updateSpawnLayer();
+                updateHash();
+            }});
         }}
 
         const questChestToggle = document.getElementById('questchest-toggle');
         if (questChestToggle) {{
-            questChestToggle.addEventListener('change', updateQuestChestLayer);
+            questChestToggle.addEventListener('change', function() {{
+                updateQuestChestLayer();
+                updateHash();
+            }});
         }}
 
         const npcToggle = document.getElementById('npc-toggle');
         if (npcToggle) {{
-            npcToggle.addEventListener('change', updateNpcLayer);
+            npcToggle.addEventListener('change', function() {{
+                updateNpcLayer();
+                updateHash();
+            }});
         }}
 
         const crosshairToggle = document.getElementById('crosshair-toggle');
@@ -683,12 +759,16 @@ pub fn generate_html<P: AsRef<Path>>(
                 }} else {{
                     crosshair.classList.remove('visible');
                 }}
+                updateHash();
             }});
         }}
 
         const sectorGridToggle = document.getElementById('sector-grid-toggle');
         if (sectorGridToggle) {{
-            sectorGridToggle.addEventListener('change', updateSectorGridLayer);
+            sectorGridToggle.addEventListener('change', function() {{
+                updateSectorGridLayer();
+                updateHash();
+            }});
         }}
 
         map.on('click', function(e) {{

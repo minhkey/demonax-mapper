@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,38 +14,82 @@ pub struct NpcLocation {
     pub z: u8,
 }
 
-pub fn parse_npc_db<P: AsRef<Path>>(path: P) -> Result<Vec<NpcLocation>> {
-    let conn = Connection::open(path.as_ref())
-        .with_context(|| format!("Failed to open NPC database: {:?}", path.as_ref()))?;
-
-    let mut stmt = conn
-        .prepare("SELECT id, file_name, npc_name, x, y, z FROM npc_locations")
-        .with_context(|| "Failed to prepare SQL query for npc_locations table")?;
-
-    let npc_iter = stmt
-        .query_map([], |row| {
-            Ok(NpcLocation {
-                id: row.get(0)?,
-                file_name: row.get(1)?,
-                npc_name: row.get(2)?,
-                x: row.get(3)?,
-                y: row.get(4)?,
-                z: row.get(5)?,
-            })
-        })
-        .with_context(|| "Failed to query npc_locations table")?;
+pub fn parse_npc_csv<P: AsRef<Path>>(csv_path: P) -> Result<Vec<NpcLocation>> {
+    let content = fs::read_to_string(csv_path.as_ref())
+        .with_context(|| format!("Failed to read NPC CSV: {:?}", csv_path.as_ref()))?;
 
     let mut npcs = Vec::new();
-    for (idx, npc_result) in npc_iter.enumerate() {
-        match npc_result {
-            Ok(npc) => npcs.push(npc),
-            Err(e) => {
-                tracing::warn!("Skipping invalid NPC row {}: {}", idx + 1, e);
-            }
+
+    for (line_num, line) in content.lines().enumerate() {
+        // Skip header line
+        if line_num == 0 {
+            continue;
         }
+
+        // Skip empty lines
+        if line.is_empty() {
+            continue;
+        }
+
+        // Split on comma, limit to 6 parts to allow commas in npc_name
+        let parts: Vec<&str> = line.splitn(6, ',').collect();
+
+        if parts.len() < 6 {
+            tracing::warn!("Line {}: Invalid CSV format, expected 6 fields, got {}",
+                line_num + 1, parts.len());
+            continue;
+        }
+
+        let id = match parts[0].trim().parse::<i32>() {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Line {}: Failed to parse id '{}': {}",
+                    line_num + 1, parts[0], e);
+                continue;
+            }
+        };
+
+        let file_name = parts[1].trim().trim_matches('"').to_string();
+        let npc_name = parts[2].trim().trim_matches('"').to_string();
+
+        let x = match parts[3].trim().parse::<u32>() {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Line {}: Failed to parse x '{}': {}",
+                    line_num + 1, parts[3], e);
+                continue;
+            }
+        };
+
+        let y = match parts[4].trim().parse::<u32>() {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Line {}: Failed to parse y '{}': {}",
+                    line_num + 1, parts[4], e);
+                continue;
+            }
+        };
+
+        let z = match parts[5].trim().parse::<u8>() {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Line {}: Failed to parse z '{}': {}",
+                    line_num + 1, parts[5], e);
+                continue;
+            }
+        };
+
+        npcs.push(NpcLocation {
+            id,
+            file_name,
+            npc_name,
+            x,
+            y,
+            z,
+        });
     }
 
-    tracing::info!("Parsed {} NPCs from database", npcs.len());
+    tracing::info!("Parsed {} NPCs from CSV", npcs.len());
     Ok(npcs)
 }
 

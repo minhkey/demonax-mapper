@@ -8,7 +8,8 @@ A map generator for Tibia-style game servers that generates zoomable [Leaflet](h
 - **Multi-zoom support**: Generates tiles at multiple zoom levels (0-5)
 - **Multi-floor support**: Generates maps for any floor (0-15), where 7 is ground floor
 - **Monster spawn visualization**: Displays spawn points from `monster.db` with monster sprite images
-- **Map coordinate in address**: Shows position hash in the web address
+- **NPC locations**: Displays NPC positions from CSV file with NPC sprite images
+- **Map coordinate in address**: Shows position and toggle states in the web address for easy sharing
 - **Quest locations**: Optionally shows locations of in-game quest items
 - **Copy coordinates and sector names**: Middle click to copy the current sector name (e.g., `1011-1006-07.sec`), or Ctrl+Left click on the map to copy current coordinates (e.g., `32368,32215,7`)
 
@@ -37,7 +38,9 @@ A map generator for Tibia-style game servers that generates zoomable [Leaflet](h
 Optional for additional features:
 - `monster.db` for monster spawn data
 - Monster sprite PNG files named by race ID (e.g., `1.png`, `2.png`)
-- A `.csv` file with quest number and quest name mappings
+- `npc_locations.csv` for NPC location data
+- NPC sprite PNG files named by NPC file name (e.g., `spooky.png`, `soullost.png`)
+- `quest_overview.csv` file with quest number and quest name mappings
 
 ## Input files structure
 
@@ -76,7 +79,18 @@ monster-sprites/               # Optional: Monster sprites (--monster-sprites)
 └── ...
 ```
 
-If you omit the `--monster-sprites` flag then no spaws are generated and the corresponding button is disabled.
+If you omit the `--monster-sprites` flag then no spawns are generated and the corresponding button is disabled.
+
+For NPC locations, you'll need a `.csv` file formatted as follows:
+
+```text
+id,file_name,npc_name,x,y,z
+113,spooky,"A Ghostly Woman",32191,31811,5
+22,soullost,"A Lost Soul",32209,31924,12
+...
+```
+
+The NPC sprite files should be named by the `file_name` column (e.g., `spooky.png`). Both `--npc-csv` and `--npc-sprites` are required for NPC visualization.
 
 Finally, if you want to show quest locations, you'll need a `.csv` file formatted as follows:
 
@@ -167,6 +181,24 @@ Monster spawns will be displayed as markers on the map with creature images.
 
 **Note:** Both `--monster-db` and `--monster-sprites` are required for monster spawn visualization.
 
+### Include NPC locations
+
+Generate map with NPC location markers:
+
+```bash
+./target/release/demonax-mapper build \
+    --objects-path /path/to/game/dat/objects.srv \
+    --map-path /path/to/game/map \
+    --sprite-path /path/to/sprites \
+    --floors 7 \
+    --npc-csv /path/to/npc_locations.csv \
+    --npc-sprites /path/to/npc-sprites
+```
+
+NPCs will be displayed as markers on the map with their sprite images.
+
+**Note:** Both `--npc-csv` and `--npc-sprites` are required for NPC visualization.
+
 ### Controlling thread count
 
 By default, the mapper uses all available CPU cores. You can limit this with `--threads` or `-j`:
@@ -207,6 +239,28 @@ Then open your browser to `http://localhost:8000` to view the interactive map.
 
 **Note:** A local web server is required because the map tiles are loaded via HTTP requests. Simply opening `index.html` in a browser won't work due to CORS restrictions.
 
+## Sharing map links
+
+The map URL includes both the current position and the state of all toggles (spawns, NPCs, quests, crosshair, grid), making it easy to share specific views:
+
+```
+http://localhost:8000/#32500,32300,7,4?spawns=1&npcs=1&quests=1
+```
+
+URL format: `#x,y,floor,zoom?toggles`
+
+Toggle parameters:
+- `spawns=1` - Show monster spawns
+- `npcs=1` - Show NPC locations
+- `quests=1` - Show quest chest locations
+- `crosshair=1` - Show center crosshair
+- `grid=1` - Show sector grid
+
+When someone opens a URL with toggle parameters, the map will automatically enable those overlays. This is useful for:
+- Linking to specific NPC locations in guides
+- Sharing spawn area information
+- Creating bookmarks for quest locations
+
 ## Output structure
 
 After generation, the output directory contains:
@@ -219,6 +273,12 @@ output/
 │   ├── 1.png           # PNG files named by race ID
 │   ├── 2.png
 │   └── ...
+├── npcs.json           # NPC location data (optional, when using --npc-csv)
+├── npcs/               # NPC sprite images (optional, when using --npc-sprites)
+│   ├── spooky.png      # PNG files named by file_name
+│   ├── soullost.png
+│   └── ...
+├── questchests.json    # Quest chest locations (optional, when using --quest-csv)
 ├── 7/                  # Floor 7
 │   ├── 0/              # Zoom level 0
 │   │   ├── 0/          # Tile column 0

@@ -58,8 +58,8 @@ enum Commands {
         #[arg(long, help = "Path to monster sprite PNG directory")]
         monster_sprites: Option<PathBuf>,
 
-        #[arg(long, help = "Path to NPC database (SQLite)")]
-        npc_db: Option<PathBuf>,
+        #[arg(long, help = "Path to NPC CSV file")]
+        npc_csv: Option<PathBuf>,
 
         #[arg(long, help = "Path to NPC sprite PNG directory")]
         npc_sprites: Option<PathBuf>,
@@ -102,7 +102,7 @@ fn main() -> Result<()> {
             monster_db,
             mon_path,
             monster_sprites,
-            npc_db,
+            npc_csv,
             npc_sprites,
             quest_csv,
             threads,
@@ -118,7 +118,7 @@ fn main() -> Result<()> {
                 monster_db,
                 mon_path,
                 monster_sprites,
-                npc_db,
+                npc_csv,
                 npc_sprites,
                 quest_csv,
                 threads,
@@ -202,7 +202,7 @@ fn cmd_build(
     monster_db: Option<PathBuf>,
     mon_path: Option<PathBuf>,
     monster_sprites: Option<PathBuf>,
-    npc_db: Option<PathBuf>,
+    npc_csv: Option<PathBuf>,
     npc_sprites: Option<PathBuf>,
     quest_csv: Option<PathBuf>,
     threads: Option<usize>,
@@ -426,13 +426,13 @@ fn cmd_build(
 
     pb.finish_with_message(format!("Quest chests: {} found", quest_chests.len()));
 
-    // Process NPC data if both npc_db and npc_sprites are provided
-    if let (Some(npc_db_path), Some(npc_sprites_dir)) = (&npc_db, &npc_sprites) {
+    // Process NPC data if both npc_csv and npc_sprites are provided
+    if let (Some(npc_csv_path), Some(npc_sprites_dir)) = (&npc_csv, &npc_sprites) {
         let pb = ProgressBar::new_spinner();
         pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
-        pb.set_message("Parsing NPC database...");
+        pb.set_message("Parsing NPC CSV...");
 
-        let npcs = parse_npc_db(npc_db_path)?;
+        let npcs = parse_npc_csv(npc_csv_path)?;
 
         pb.set_message("Copying NPC sprites...");
         let npcs_dir = output.join("npcs");
