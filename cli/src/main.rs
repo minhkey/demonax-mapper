@@ -58,6 +58,12 @@ enum Commands {
         #[arg(long, help = "Path to monster sprite PNG directory")]
         monster_sprites: Option<PathBuf>,
 
+        #[arg(long, help = "Path to NPC database (SQLite)")]
+        npc_db: Option<PathBuf>,
+
+        #[arg(long, help = "Path to NPC sprite PNG directory")]
+        npc_sprites: Option<PathBuf>,
+
         #[arg(long, help = "Path to quest_overview.csv file")]
         quest_csv: Option<PathBuf>,
 
@@ -96,6 +102,8 @@ fn main() -> Result<()> {
             monster_db,
             mon_path,
             monster_sprites,
+            npc_db,
+            npc_sprites,
             quest_csv,
             threads,
         } => {
@@ -110,6 +118,8 @@ fn main() -> Result<()> {
                 monster_db,
                 mon_path,
                 monster_sprites,
+                npc_db,
+                npc_sprites,
                 quest_csv,
                 threads,
             )?;
@@ -192,6 +202,8 @@ fn cmd_build(
     monster_db: Option<PathBuf>,
     mon_path: Option<PathBuf>,
     monster_sprites: Option<PathBuf>,
+    npc_db: Option<PathBuf>,
+    npc_sprites: Option<PathBuf>,
     quest_csv: Option<PathBuf>,
     threads: Option<usize>,
 ) -> Result<()> {
@@ -413,6 +425,54 @@ fn cmd_build(
     fs::write(output.join("questchests.json"), questchests_json)?;
 
     pb.finish_with_message(format!("Quest chests: {} found", quest_chests.len()));
+
+    // Process NPC data if both npc_db and npc_sprites are provided
+    if let (Some(npc_db_path), Some(npc_sprites_dir)) = (&npc_db, &npc_sprites) {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}")?);
+        pb.set_message("Parsing NPC database...");
+
+        let npcs = parse_npc_db(npc_db_path)?;
+
+        pb.set_message("Copying NPC sprites...");
+        let npcs_dir = output.join("npcs");
+        fs::create_dir_all(&npcs_dir)?;
+
+        // Copy PNG files (named by file_name)
+        let mut copied_count = 0;
+        let mut missing_sprites = Vec::new();
+        for npc in &npcs {
+            let src = npc_sprites_dir.join(format!("{}.png", npc.file_name));
+            let dst = npcs_dir.join(format!("{}.png", npc.file_name));
+
+            if src.exists() {
+                fs::copy(&src, &dst)?;
+                copied_count += 1;
+            } else {
+                missing_sprites.push(npc.file_name.clone());
+            }
+        }
+
+        if !missing_sprites.is_empty() {
+            tracing::warn!("Missing {} NPC sprites", missing_sprites.len());
+            for sprite in missing_sprites.iter().take(5) {
+                tracing::warn!("  Missing sprite: {}.png", sprite);
+            }
+            if missing_sprites.len() > 5 {
+                tracing::warn!("  ... and {} more", missing_sprites.len() - 5);
+            }
+        }
+
+        pb.set_message("Generating NPC data...");
+        let npc_json = generate_npc_json(&npcs, &floors)?;
+        fs::write(output.join("npcs.json"), npc_json)?;
+
+        pb.finish_with_message(format!(
+            "NPCs: {} total, {} sprites copied",
+            npcs.len(),
+            copied_count
+        ));
+    }
 
     println!("✓ Build complete → {:?}/index.html", output);
 

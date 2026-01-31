@@ -200,8 +200,7 @@ Add `-v` flags for more detailed logging:
 After generating the map, you can test it locally using Python's built-in HTTP server:
 
 ```bash
-cd output
-python3 -m http.server 8000
+cd output && python3 -m http.server 8000
 ```
 
 Then open your browser to `http://localhost:8000` to view the interactive map.

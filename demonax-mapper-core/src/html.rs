@@ -100,6 +100,18 @@ pub fn generate_html<P: AsRef<Path>>(
             font-size: 14px;
             pointer-events: none;
         }}
+        .leaflet-marker-icon.npc-marker {{
+            width: 32px !important;
+            height: 32px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }}
+        .npc-marker img {{
+            max-width: 32px;
+            max-height: 32px;
+            image-rendering: pixelated;
+        }}
         input[type="checkbox"] {{
             cursor: pointer;
         }}
@@ -162,6 +174,12 @@ pub fn generate_html<P: AsRef<Path>>(
             <label>
                 <input type="checkbox" id="questchest-toggle" />
                 Show quest locations
+            </label>
+        </div>
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="npc-toggle" />
+                Show NPCs
             </label>
         </div>
         <div class="control-group">
@@ -381,6 +399,30 @@ pub fn generate_html<P: AsRef<Path>>(
                 }}
             }});
 
+        // NPC overlay
+        let npcData = null;
+        let npcMarkers = [];
+
+        fetch('npcs.json')
+            .then(response => {{
+                if (!response.ok) {{
+                    throw new Error('NPC data not found');
+                }}
+                return response.json();
+            }})
+            .then(data => {{
+                npcData = data;
+                updateNpcLayer();
+            }})
+            .catch(err => {{
+                console.warn('NPC data unavailable:', err);
+                const toggle = document.getElementById('npc-toggle');
+                if (toggle) {{
+                    toggle.disabled = true;
+                    toggle.parentElement.title = 'NPC data not available';
+                }}
+            }});
+
         function worldToLatLng(worldX, worldY) {{
             const tileX = worldX - minTileX;
             const tileY = worldY - minTileY;
@@ -472,6 +514,45 @@ pub fn generate_html<P: AsRef<Path>>(
 
                 marker.addTo(map);
                 questChestMarkers.push(marker);
+            }});
+        }}
+
+        function updateNpcLayer() {{
+            npcMarkers.forEach(marker => map.removeLayer(marker));
+            npcMarkers = [];
+
+            const toggle = document.getElementById('npc-toggle');
+            const showNpcs = toggle && toggle.checked;
+            const currentZoom = map.getZoom();
+
+            if (!showNpcs || !npcData || currentZoom < 3) {{
+                return;
+            }}
+
+            const floorNpcs = npcData.npcs_by_floor[currentFloor] || [];
+            const bounds = map.getBounds();
+
+            const visibleNpcs = floorNpcs.filter(npc => {{
+                const [lat, lng] = worldToLatLng(npc.x, npc.y);
+                return bounds.contains([lat, lng]);
+            }});
+
+            visibleNpcs.forEach(npc => {{
+                const [lat, lng] = worldToLatLng(npc.x, npc.y);
+
+                const icon = L.divIcon({{
+                    className: 'npc-marker',
+                    html: `<img src="npcs/${{npc.file_name}}.png" alt="${{npc.npc_name}}" onerror="this.style.display='none'" />`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16],
+                    popupAnchor: [0, -16]
+                }});
+
+                const marker = L.marker([lat, lng], {{ icon: icon }})
+                    .bindPopup(`<b>${{npc.npc_name}}</b><br/>Position: ${{npc.x}}, ${{npc.y}}`);
+
+                marker.addTo(map);
+                npcMarkers.push(marker);
             }});
         }}
 
@@ -588,6 +669,11 @@ pub fn generate_html<P: AsRef<Path>>(
             questChestToggle.addEventListener('change', updateQuestChestLayer);
         }}
 
+        const npcToggle = document.getElementById('npc-toggle');
+        if (npcToggle) {{
+            npcToggle.addEventListener('change', updateNpcLayer);
+        }}
+
         const crosshairToggle = document.getElementById('crosshair-toggle');
         const crosshair = document.getElementById('crosshair');
         if (crosshairToggle && crosshair) {{
@@ -623,12 +709,14 @@ pub fn generate_html<P: AsRef<Path>>(
         map.on('moveend', function() {{
             updateSpawnLayer();
             updateQuestChestLayer();
+            updateNpcLayer();
             updateSectorGridLayer();
         }});
 
         map.on('zoomend', function() {{
             updateSpawnLayer();
             updateQuestChestLayer();
+            updateNpcLayer();
             updateSectorGridLayer();
         }});
 
@@ -637,6 +725,7 @@ pub fn generate_html<P: AsRef<Path>>(
             originalLoadFloor(floor);
             updateSpawnLayer();
             updateQuestChestLayer();
+            updateNpcLayer();
             updateSectorGridLayer();
         }};
     </script>
