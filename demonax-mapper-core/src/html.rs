@@ -120,8 +120,8 @@ pub fn generate_html<P: AsRef<Path>>(
         }}
         #crosshair {{
             position: absolute;
-            top: calc(50% + 25px);
-            left: 50%;
+            top: calc(50% + 25px + 16px);
+            left: calc(50% + 16px);
             transform: translate(-50%, -50%);
             pointer-events: none;
             z-index: 1000;
