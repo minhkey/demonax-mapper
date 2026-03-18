@@ -23,10 +23,6 @@ A map generator for Tibia-style game servers that generates zoomable [Leaflet](h
 
 ![](assets/mapper_4.png) 
 
-![](assets/mapper_5.png) 
-
-![](assets/mapper_6.png) 
-
 ## Prerequisites
 
 - Rust 2024 edition or later
