@@ -33,9 +33,9 @@ A map generator for Tibia-style game servers that generates zoomable [Leaflet](h
 
 Optional for additional features:
 - `monster.db` for monster spawn data
-- Monster sprite PNG files named by race ID (e.g., `1.png`, `2.png`)
+- Monster sprite PNG files named by race ID (e.g., `27.png`, `311.png`)
 - `npc_locations.csv` for NPC location data
-- NPC sprite PNG files named by NPC file name (e.g., `spooky.png`, `soullost.png`)
+- NPC sprite PNG files named by NPC file name (e.g., `aruda.png`, `frodo.png`)
 - `quest_overview.csv` file with quest number and quest name mappings
 
 ## Input files structure
@@ -169,7 +169,7 @@ Generate map with monster spawn points:
     --sprite-path /path/to/sprites \
     --floors 7 \
     --monster-db /path/to/monster.db \
-    --monster-names-dir /path/to/mon \
+    --mon-path /path/to/mon \
     --monster-sprites /path/to/monster-sprites
 ```
 
